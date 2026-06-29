@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: gymeat-app
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set DEEPSEEK_API_KEY in the Render dashboard (Environment tab),
+      # NOT here — never commit the key to code.
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      # Optional: only if you also want a server-side default Gemini key.
+      - key: GEMINI_API_KEY
+        sync: false

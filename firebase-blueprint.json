@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and macro goals",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "goals": {
+          "type": "object",
+          "properties": {
+            "calories": { "type": "number" },
+            "protein": { "type": "number" },
+            "carbs": { "type": "number" },
+            "fat": { "type": "number" }
+          }
+        }
+      },
+      "required": ["uid", "goals"]
+    },
+    "LibraryFood": {
+      "title": "LibraryFood",
+      "description": "Custom food entry in user's library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "caloriesPer100g": { "type": "number" },
+        "proteinPer100g": { "type": "number" },
+        "carbsPer100g": { "type": "number" },
+        "fatPer100g": { "type": "number" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["id", "name", "caloriesPer100g", "ownerUid"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily food intake log",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "foods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "calories": { "type": "number" },
+              "protein": { "type": "number" },
+              "carbs": { "type": "number" },
+              "fat": { "type": "number" },
+              "amount": { "type": "string" },
+              "timestamp": { "type": "number" },
+              "mealType": { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"] }
+            }
+          }
+        }
+      },
+      "required": ["date", "ownerUid", "foods"]
+    },
+    "WeightLog": {
+      "title": "WeightLog",
+      "description": "User weight entry",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "weight": { "type": "number" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["date", "weight", "ownerUid"]
+    },
+    "WaterLog": {
+      "title": "WaterLog",
+      "description": "Daily water intake",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "amount": { "type": "number" },
+        "ownerUid": { "type": "string" }
+      },
+      "required": ["date", "amount", "ownerUid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User settings and goals"
+    },
+    "/users/{userId}/library/{foodId}": {
+      "schema": "LibraryFood",
+      "description": "User's custom food library"
+    },
+    "/users/{userId}/logs/{date}": {
+      "schema": "DailyLog",
+      "description": "User's daily nutrition logs"
+    },
+    "/users/{userId}/weightLogs/{date}": {
+      "schema": "WeightLog",
+      "description": "User's weight history"
+    },
+    "/users/{userId}/waterLogs/{date}": {
+      "schema": "WaterLog",
+      "description": "User's daily water intake"
+    }
+  }
+}

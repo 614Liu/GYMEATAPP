@@ -1,0 +1,6 @@
+{
+  "name": "健食",
+  "description": "专业健身饮食管理助手。支持AI智能识别、专属食物库管理及每日宏观营养追踪，助力科学健身。",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

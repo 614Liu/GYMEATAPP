@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidGoal(goal) {
+      return goal.calories is number && goal.calories > 0 &&
+             goal.protein is number && goal.protein >= 0 &&
+             goal.carbs is number && goal.carbs >= 0 &&
+             goal.fat is number && goal.fat >= 0;
+    }
+
+    function isValidLibraryFood(data) {
+      return data.id is string && 
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.caloriesPer100g is number &&
+             data.proteinPer100g is number &&
+             data.carbsPer100g is number &&
+             data.fatPer100g is number &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidFoodItem(food) {
+      return food.id is string &&
+             food.name is string &&
+             food.calories is number &&
+             food.protein is number &&
+             food.carbs is number &&
+             food.fat is number &&
+             food.amount is string &&
+             food.timestamp is number &&
+             (!('mealType' in food) || food.mealType in ['breakfast', 'lunch', 'dinner', 'snack']);
+    }
+
+    function isValidWeightLog(data) {
+      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             data.weight is number && data.weight > 0 &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidWaterLog(data) {
+      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             data.amount is number && data.amount >= 0 &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidDailyLog(data) {
+      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             data.ownerUid == request.auth.uid &&
+             data.foods is list;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && 
+                              request.resource.data.uid == userId &&
+                              isValidGoal(request.resource.data.goals);
+
+      match /library/{foodId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidLibraryFood(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /logs/{date} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidDailyLog(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /weightLogs/{date} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidWeightLog(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /waterLogs/{date} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidWaterLog(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
