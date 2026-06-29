@@ -35,16 +35,7 @@ class GlobalErrorBoundary extends Component<{children: ReactNode}, {hasError: bo
   }
 }
 
-// Unregister any existing service workers to fix caching issues
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister();
-    }
-  }).catch((err) => {
-    console.error('Service Worker unregistration failed: ', err);
-  });
-}
+// Service worker is registered automatically by vite-plugin-pwa (registerType: autoUpdate).
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
