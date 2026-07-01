@@ -1,6 +1,6 @@
 # GYMEAT 版本基线
 
-## v1.0-baseline （干净基线）
+## v1.1-aicoach （干净基线）
 
 这一版整合了以下所有改动，作为后续开发的统一起点。
 GitHub / Render / 本地代码请全部以这一版为准。
@@ -17,5 +17,5 @@ GitHub / Render / 本地代码请全部以这一版为准。
 
 ### 后端健康检查
 部署后访问：`https://gymeatapp.onrender.com/api/health`
-应返回：`{"status":"ok","version":"v1.0-baseline"}`
+应返回：`{"status":"ok","version":"v1.1-aicoach"}`
 用这个确认线上是不是这一版。

@@ -191,13 +191,109 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
 // Health check — visit this URL to confirm which version is live.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "v1.0-baseline" });
+  res.json({ status: "ok", version: "v1.1-aicoach" });
+});
+
+// ===============================================================
+// AI Coach — daily tips + next-meal recommendations, goal-aware.
+// Reuses the same dual-provider (Gemini / DeepSeek) plumbing.
+// ===============================================================
+
+const GOAL_LABELS: Record<string, string> = {
+  gain: "增肌（提高蛋白质摄入，保证热量盈余）",
+  lose: "减脂（控制总热量，保证蛋白质，减少精制碳水）",
+  maintain: "维持（营养均衡，热量与消耗持平）",
+};
+
+function buildCoachPrompt(kind: string, data: any): string {
+  const goalText = GOAL_LABELS[data?.goal] || GOAL_LABELS.maintain;
+  const t = data?.totals || {};
+  const g = data?.goals || {};
+  const stats = `用户目标：${goalText}
+今日已摄入：热量 ${Math.round(t.calories || 0)} / ${g.calories || 0} kcal，蛋白质 ${Math.round(t.protein || 0)} / ${g.protein || 0} g，碳水 ${Math.round(t.carbs || 0)} / ${g.carbs || 0} g，脂肪 ${Math.round(t.fat || 0)} / ${g.fat || 0} g。`;
+
+  if (kind === "meal") {
+    return `${stats}
+
+请根据用户的目标和今日剩余额度，推荐【下一餐】具体吃什么。要求：
+1. 给出 2-3 个具体的食物/搭配建议（中文，接地气，符合中国人饮食）。
+2. 每个建议标注大致热量和蛋白质。
+3. 优先补足距离目标还差的营养素。
+只返回一个 JSON 对象：{"suggestions":[{"name":"食物名","calories":数字,"protein":数字,"reason":"一句话理由"}]}，不要额外文字或 Markdown。`;
+  }
+
+  // default: daily tip
+  return `${stats}
+
+请用一句话（40字以内）给用户一条今天的营养小建议，要具体、可执行、贴合用户目标。
+只返回一个 JSON 对象：{"tip":"你的建议"}，不要额外文字或 Markdown。`;
+}
+
+app.post("/api/coach", async (req, res) => {
+  try {
+    const { kind, data, customApiKey, provider } = req.body;
+    const prompt = buildCoachPrompt(kind || "tip", data || {});
+    const systemInstruction = "你是一位专业、务实的营养教练，说话简洁不啰嗦。";
+
+    // DeepSeek branch
+    if (provider === "deepseek") {
+      const dsKey = (customApiKey || process.env.DEEPSEEK_API_KEY || "").trim();
+      if (!isValidDeepSeekKey(dsKey)) {
+        return res.status(400).json({ error: "DeepSeek API Key 无效，请在设置中填写。" });
+      }
+      const resp = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${dsKey}` },
+        body: JSON.stringify({
+          model: "deepseek-v4-flash",
+          messages: [
+            { role: "system", content: systemInstruction },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.6,
+        }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(`DeepSeek ${resp.status}: ${detail}`);
+      }
+      const dsData = await resp.json();
+      let dsText = (dsData?.choices?.[0]?.message?.content || "").replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
+      return res.json(JSON.parse(dsText));
+    }
+
+    // Gemini branch
+    const { client: aiClient, isValid } = getGeminiClientAndStatus(customApiKey);
+    if (!isValid) {
+      return res.status(400).json({ error: "Gemini API Key 不可用，请在设置中配置或改用 DeepSeek。" });
+    }
+    const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+    let text = "";
+    let lastError: any = null;
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await aiClient.models.generateContent({
+          model: modelName,
+          contents: [{ text: prompt }],
+          config: { systemInstruction, responseMimeType: "application/json" },
+        });
+        text = response.text || "";
+        if (text) break;
+      } catch (err: any) {
+        lastError = err;
+        if (err.status === 400) throw err;
+      }
+    }
+    if (!text) throw lastError || new Error("AI 未返回结果");
+    text = text.replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
+    res.json(JSON.parse(text));
+  } catch (error: any) {
+    console.error("Coach API Error:", error);
+    res.status(500).json({ error: error.message || "教练建议生成失败" });
+  }
 });
 
 app.post("/api/estimate", async (req, res) => {

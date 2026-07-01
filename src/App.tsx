@@ -28,7 +28,11 @@ import {
   Pencil,
   LogOut,
   CheckCircle2,
-  Info
+  Info,
+  Sparkles,
+  Lightbulb,
+  Utensils,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence, animate } from 'motion/react';
 import { format, subDays, addDays, startOfDay, isBefore, startOfToday } from 'date-fns';
@@ -47,7 +51,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { cn } from './lib/utils';
-import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError } from './lib/gemini';
+import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions } from './lib/gemini';
 import { FoodItem, MacroGoals, DailyLog, LibraryFood, WeightLog, WaterLog, MealType } from './types';
 
 import { auth, db } from './lib/firebase';
@@ -157,6 +161,17 @@ export default function App() {
       return [];
     }
   });
+  // Fitness goal for AI coach: 'gain' | 'lose' | 'maintain'
+  const [fitnessGoal, setFitnessGoal] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('jianshi_fitness_goal') || 'maintain';
+    }
+    return 'maintain';
+  });
+  const [dailyTip, setDailyTip] = useState<string>('');
+  const [tipLoading, setTipLoading] = useState(false);
+  const [mealSuggestions, setMealSuggestions] = useState<any[]>([]);
+  const [mealLoading, setMealLoading] = useState(false);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>(() => {
     try {
       const saved = localStorage.getItem('jianshi_weight');
@@ -617,6 +632,52 @@ export default function App() {
     }
   };
 
+  // Persist fitness goal locally
+  useEffect(() => {
+    try {
+      localStorage.setItem('jianshi_fitness_goal', fitnessGoal);
+    } catch (e) { /* ignore */ }
+  }, [fitnessGoal]);
+
+  // Fetch a daily AI tip (once per day, cached in localStorage by date)
+  const fetchDailyTip = async (force = false) => {
+    const cacheKey = `jianshi_tip_${todayStr}_${fitnessGoal}`;
+    if (!force) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) { setDailyTip(cached); return; }
+    }
+    setTipLoading(true);
+    try {
+      const tip = await getDailyTip({ goal: fitnessGoal, totals, goals });
+      setDailyTip(tip);
+      localStorage.setItem(cacheKey, tip);
+    } catch (e: any) {
+      setDailyTip('');
+    } finally {
+      setTipLoading(false);
+    }
+  };
+
+  const fetchMealSuggestions = async () => {
+    setMealLoading(true);
+    setMealSuggestions([]);
+    try {
+      const s = await getMealSuggestions({ goal: fitnessGoal, totals, goals });
+      setMealSuggestions(s);
+    } catch (e: any) {
+      setToast({ message: parseAiError(e?.message || String(e)), type: 'error' });
+    } finally {
+      setMealLoading(false);
+    }
+  };
+
+  // Auto-load cached tip when date/goal changes
+  useEffect(() => {
+    const cached = localStorage.getItem(`jianshi_tip_${todayStr}_${fitnessGoal}`);
+    if (cached) setDailyTip(cached);
+    else setDailyTip('');
+  }, [todayStr, fitnessGoal]);
+
   const handleUpdateWater = async (amount: number) => {
     const currentAmount = waterLogs.find(l => l.date === todayStr)?.amount || 0;
     const newAmount = Math.max(0, currentAmount + amount);
@@ -1058,6 +1119,61 @@ export default function App() {
                 <MacroStat label="蛋白质" current={totals.protein} target={goals.protein} color={COLORS.protein} icon={<Beef size={14} />} />
                 <MacroStat label="碳水" current={totals.carbs} target={goals.carbs} color={COLORS.carbs} icon={<Wheat size={14} />} />
                 <MacroStat label="脂肪" current={totals.fat} target={goals.fat} color={COLORS.fat} icon={<Droplets size={14} />} />
+              </div>
+
+              {/* AI Coach card */}
+              <div className="mt-5 rounded-2xl bg-slate-900 p-4 text-white">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-emerald-400" />
+                    <span className="text-sm font-black">AI 营养教练</span>
+                  </div>
+                  <button
+                    onClick={() => fetchDailyTip(true)}
+                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                    aria-label="刷新建议"
+                  >
+                    <RefreshCw size={14} className={tipLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {dailyTip ? (
+                  <div className="flex gap-2 items-start mb-3">
+                    <Lightbulb size={15} className="text-amber-300 mt-0.5 shrink-0" />
+                    <p className="text-sm text-slate-100 leading-relaxed">{dailyTip}</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => fetchDailyTip(true)}
+                    disabled={tipLoading}
+                    className="text-sm text-slate-300 mb-3 hover:text-white transition-colors"
+                  >
+                    {tipLoading ? '正在思考…' : '点我获取今日营养建议 →'}
+                  </button>
+                )}
+
+                <button
+                  onClick={fetchMealSuggestions}
+                  disabled={mealLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black py-2.5 rounded-xl transition-colors disabled:opacity-60"
+                >
+                  <Utensils size={15} />
+                  {mealLoading ? '正在为你搭配…' : '推荐下一餐吃什么'}
+                </button>
+
+                {mealSuggestions.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {mealSuggestions.map((s, i) => (
+                      <div key={i} className="bg-white/10 rounded-xl p-3">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <span className="font-black text-sm">{s.name}</span>
+                          <span className="text-xs text-emerald-300 font-bold">{Math.round(s.calories)} kcal · 蛋白 {Math.round(s.protein)}g</span>
+                        </div>
+                        {s.reason && <p className="text-xs text-slate-300">{s.reason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2110,6 +2226,25 @@ export default function App() {
               </div>
 
               <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 block">我的目标（影响 AI 教练建议）</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'gain', label: '增肌' },
+                      { key: 'lose', label: '减脂' },
+                      { key: 'maintain', label: '维持' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setFitnessGoal(opt.key)}
+                        className={`py-3 rounded-2xl font-black transition-colors ${fitnessGoal === opt.key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 flex justify-between items-center">
                     <span>每日热量目标 (kcal)</span>

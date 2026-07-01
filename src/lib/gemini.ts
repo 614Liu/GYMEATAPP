@@ -137,3 +137,45 @@ export async function estimateLibraryNutrition(query: string, imageBase64?: stri
 
   return response.json();
 }
+
+// ===== AI Coach: daily tip + next-meal recommendation =====
+
+export interface MealSuggestion {
+  name: string;
+  calories: number;
+  protein: number;
+  reason: string;
+}
+
+async function callCoach(kind: 'tip' | 'meal', data: any): Promise<any> {
+  const customApiKey = getCustomApiKey();
+  const provider = getProvider();
+  const response = await fetch(apiUrl('/api/coach'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, data, customApiKey, provider }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `请求失败: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function getDailyTip(data: {
+  goal: string;
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  goals: { calories: number; protein: number; carbs: number; fat: number };
+}): Promise<string> {
+  const res = await callCoach('tip', data);
+  return res.tip || '';
+}
+
+export async function getMealSuggestions(data: {
+  goal: string;
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  goals: { calories: number; protein: number; carbs: number; fat: number };
+}): Promise<MealSuggestion[]> {
+  const res = await callCoach('meal', data);
+  return res.suggestions || [];
+}
