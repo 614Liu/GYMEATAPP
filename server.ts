@@ -30,12 +30,7 @@ function getGeminiClientAndStatus(customApiKey?: string) {
   
   return {
     client: new GoogleGenAI({ 
-      apiKey: isValid ? apiKey : "AI_STUDIO_FALLBACK_KEY",
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
+      apiKey: isValid ? apiKey : "INVALID_KEY_PLACEHOLDER"
     }),
     isValid,
     isCustom
@@ -193,7 +188,7 @@ app.use((req, res, next) => {
 
 // Health check — visit this URL to confirm which version is live.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "v1.1-aicoach" });
+  res.json({ status: "ok", version: "v1.2-chat" });
 });
 
 // ===============================================================
@@ -293,6 +288,97 @@ app.post("/api/coach", async (req, res) => {
   } catch (error: any) {
     console.error("Coach API Error:", error);
     res.status(500).json({ error: error.message || "教练建议生成失败" });
+  }
+});
+
+// ===============================================================
+// AI Chat — free-form Q&A, personalized with user data, but strictly
+// restricted to nutrition / diet / fitness topics.
+// ===============================================================
+
+function buildChatSystemPrompt(data: any): string {
+  const goalText = GOAL_LABELS[data?.goal] || GOAL_LABELS.maintain;
+  const t = data?.totals || {};
+  const g = data?.goals || {};
+  const recent = Array.isArray(data?.recentFoods) && data.recentFoods.length
+    ? data.recentFoods.slice(0, 15).map((f: any) => `${f.name}(${Math.round(f.calories || 0)}kcal)`).join("、")
+    : "暂无记录";
+
+  return `你是「健食」app 里的专属 AI 营养教练。你只回答与【饮食、营养、热量、食物、健身饮食、用户的饮食目标】相关的问题。
+
+【严格规则】
+- 如果用户问的问题与饮食/营养/健身无关（例如：编程、政治、写作、闲聊、新闻、情感、翻译、数学题等），你必须礼貌拒绝，回复类似："抱歉，我只能帮你解答饮食和营养相关的问题哦～" 并简短引导回饮食话题。绝对不要回答无关问题。
+- 回答要简洁、具体、可执行，说中文。
+- 充分利用下面的用户数据，给出个性化建议，而不是泛泛而谈。
+
+【用户数据】
+- 目标：${goalText}
+- 今日已摄入：热量 ${Math.round(t.calories || 0)}/${g.calories || 0} kcal，蛋白 ${Math.round(t.protein || 0)}/${g.protein || 0}g，碳水 ${Math.round(t.carbs || 0)}/${g.carbs || 0}g，脂肪 ${Math.round(t.fat || 0)}/${g.fat || 0}g
+- 最近吃过：${recent}`;
+}
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { messages, data, customApiKey, provider } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "消息为空" });
+    }
+    const systemPrompt = buildChatSystemPrompt(data || {});
+
+    // DeepSeek branch
+    if (provider === "deepseek") {
+      const dsKey = (customApiKey || process.env.DEEPSEEK_API_KEY || "").trim();
+      if (!isValidDeepSeekKey(dsKey)) {
+        return res.status(400).json({ error: "DeepSeek API Key 无效，请在设置中填写。" });
+      }
+      const resp = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${dsKey}` },
+        body: JSON.stringify({
+          model: "deepseek-v4-flash",
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          temperature: 0.7,
+        }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(`DeepSeek ${resp.status}: ${detail}`);
+      }
+      const dsData = await resp.json();
+      return res.json({ reply: dsData?.choices?.[0]?.message?.content || "" });
+    }
+
+    // Gemini branch — convert messages to Gemini format
+    const { client: aiClient, isValid } = getGeminiClientAndStatus(customApiKey);
+    if (!isValid) {
+      return res.status(400).json({ error: "Gemini API Key 不可用，请在设置中配置或改用 DeepSeek。" });
+    }
+    const geminiContents = messages.map((m: any) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+    const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+    let text = "";
+    let lastError: any = null;
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await aiClient.models.generateContent({
+          model: modelName,
+          contents: geminiContents,
+          config: { systemInstruction: systemPrompt },
+        });
+        text = response.text || "";
+        if (text) break;
+      } catch (err: any) {
+        lastError = err;
+        if (err.status === 400) throw err;
+      }
+    }
+    if (!text) throw lastError || new Error("AI 未返回结果");
+    res.json({ reply: text });
+  } catch (error: any) {
+    console.error("Chat API Error:", error);
+    res.status(500).json({ error: error.message || "对话失败" });
   }
 });
 

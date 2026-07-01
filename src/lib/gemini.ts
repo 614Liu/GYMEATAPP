@@ -179,3 +179,34 @@ export async function getMealSuggestions(data: {
   const res = await callCoach('meal', data);
   return res.suggestions || [];
 }
+
+// ===== AI Chat: personalized nutrition Q&A =====
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function sendChatMessage(
+  messages: ChatMessage[],
+  data: {
+    goal: string;
+    totals: { calories: number; protein: number; carbs: number; fat: number };
+    goals: { calories: number; protein: number; carbs: number; fat: number };
+    recentFoods?: { name: string; calories: number }[];
+  }
+): Promise<string> {
+  const customApiKey = getCustomApiKey();
+  const provider = getProvider();
+  const response = await fetch(apiUrl('/api/chat'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, data, customApiKey, provider }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `请求失败: ${response.statusText}`);
+  }
+  const res = await response.json();
+  return res.reply || '';
+}

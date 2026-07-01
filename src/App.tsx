@@ -51,7 +51,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { cn } from './lib/utils';
-import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions } from './lib/gemini';
+import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions, sendChatMessage, ChatMessage } from './lib/gemini';
 import { FoodItem, MacroGoals, DailyLog, LibraryFood, WeightLog, WaterLog, MealType } from './types';
 
 import { auth, db } from './lib/firebase';
@@ -172,6 +172,11 @@ export default function App() {
   const [tipLoading, setTipLoading] = useState(false);
   const [mealSuggestions, setMealSuggestions] = useState<any[]>([]);
   const [mealLoading, setMealLoading] = useState(false);
+  // AI chat
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>(() => {
     try {
       const saved = localStorage.getItem('jianshi_weight');
@@ -671,6 +676,24 @@ export default function App() {
     }
   };
 
+  const handleSendChat = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: text }];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const recentFoods = (todayLog?.foods || []).slice(0, 15).map((f: any) => ({ name: f.name, calories: f.calories }));
+      const reply = await sendChatMessage(newMessages, { goal: fitnessGoal, totals, goals, recentFoods });
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (e: any) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: parseAiError(e?.message || String(e)) }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   // Auto-load cached tip when date/goal changes
   useEffect(() => {
     const cached = localStorage.getItem(`jianshi_tip_${todayStr}_${fitnessGoal}`);
@@ -1120,61 +1143,6 @@ export default function App() {
                 <MacroStat label="碳水" current={totals.carbs} target={goals.carbs} color={COLORS.carbs} icon={<Wheat size={14} />} />
                 <MacroStat label="脂肪" current={totals.fat} target={goals.fat} color={COLORS.fat} icon={<Droplets size={14} />} />
               </div>
-
-              {/* AI Coach card */}
-              <div className="mt-5 rounded-2xl bg-slate-900 p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-emerald-400" />
-                    <span className="text-sm font-black">AI 营养教练</span>
-                  </div>
-                  <button
-                    onClick={() => fetchDailyTip(true)}
-                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                    aria-label="刷新建议"
-                  >
-                    <RefreshCw size={14} className={tipLoading ? 'animate-spin' : ''} />
-                  </button>
-                </div>
-
-                {dailyTip ? (
-                  <div className="flex gap-2 items-start mb-3">
-                    <Lightbulb size={15} className="text-amber-300 mt-0.5 shrink-0" />
-                    <p className="text-sm text-slate-100 leading-relaxed">{dailyTip}</p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => fetchDailyTip(true)}
-                    disabled={tipLoading}
-                    className="text-sm text-slate-300 mb-3 hover:text-white transition-colors"
-                  >
-                    {tipLoading ? '正在思考…' : '点我获取今日营养建议 →'}
-                  </button>
-                )}
-
-                <button
-                  onClick={fetchMealSuggestions}
-                  disabled={mealLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black py-2.5 rounded-xl transition-colors disabled:opacity-60"
-                >
-                  <Utensils size={15} />
-                  {mealLoading ? '正在为你搭配…' : '推荐下一餐吃什么'}
-                </button>
-
-                {mealSuggestions.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {mealSuggestions.map((s, i) => (
-                      <div key={i} className="bg-white/10 rounded-xl p-3">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="font-black text-sm">{s.name}</span>
-                          <span className="text-xs text-emerald-300 font-bold">{Math.round(s.calories)} kcal · 蛋白 {Math.round(s.protein)}g</span>
-                        </div>
-                        {s.reason && <p className="text-xs text-slate-300">{s.reason}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="h-56 relative flex items-center justify-center outline-none">
@@ -1279,7 +1247,81 @@ export default function App() {
           </div>
         </motion.section>
 
-        {/* Water & Weight Quick Stats */}
+        {/* AI Coach — independent card, light theme */}
+        <motion.section
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+          }}
+          className="bg-white/70 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/50"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-emerald-50 text-emerald-500 rounded-lg">
+                <Sparkles size={16} />
+              </div>
+              <span className="text-sm font-black text-slate-900">AI 营养教练</span>
+            </div>
+            <button
+              onClick={() => fetchDailyTip(true)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400"
+              aria-label="刷新建议"
+            >
+              <RefreshCw size={14} className={tipLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {/* daily tip */}
+          {dailyTip ? (
+            <div className="flex gap-2 items-start mb-4 bg-emerald-50/60 rounded-2xl p-3.5">
+              <Lightbulb size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-slate-700 leading-relaxed font-medium">{dailyTip}</p>
+            </div>
+          ) : (
+            <button
+              onClick={() => fetchDailyTip(true)}
+              disabled={tipLoading}
+              className="w-full text-left text-sm text-slate-400 mb-4 hover:text-emerald-600 transition-colors bg-slate-50 rounded-2xl p-3.5"
+            >
+              {tipLoading ? '正在思考…' : '💡 点我获取今日营养建议 →'}
+            </button>
+          )}
+
+          {/* action buttons */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={fetchMealSuggestions}
+              disabled={mealLoading}
+              className="flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-2xl transition-colors disabled:opacity-60 text-sm"
+            >
+              <Utensils size={15} />
+              {mealLoading ? '搭配中…' : '下一餐吃啥'}
+            </button>
+            <button
+              onClick={() => setIsChatOpen(true)}
+              className="flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-black py-3 rounded-2xl transition-colors text-sm"
+            >
+              <Sparkles size={15} />
+              问教练
+            </button>
+          </div>
+
+          {/* meal suggestions */}
+          {mealSuggestions.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {mealSuggestions.map((s, i) => (
+                <div key={i} className="bg-slate-50 rounded-2xl p-3.5">
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="font-black text-sm text-slate-900">{s.name}</span>
+                    <span className="text-xs text-emerald-600 font-bold">{Math.round(s.calories)} kcal · 蛋白 {Math.round(s.protein)}g</span>
+                  </div>
+                  {s.reason && <p className="text-xs text-slate-500">{s.reason}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.section>
+
         <div className="grid grid-cols-2 gap-4">
           <motion.section 
             variants={{
@@ -2194,6 +2236,86 @@ export default function App() {
                 >
                   保存记录
                 </motion.button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Chat Modal */}
+      <AnimatePresence>
+        {isChatOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChatOpen(false)}
+              className="absolute inset-0 bg-slate-900/60"
+            />
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-[80dvh]"
+            >
+              {/* header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-50 text-emerald-500 rounded-lg">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 leading-tight">AI 营养教练</h2>
+                    <p className="text-[11px] text-slate-400 font-bold">只回答饮食营养相关问题</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsChatOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={22} />
+                </button>
+              </div>
+
+              {/* messages */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
+                {chatMessages.length === 0 && (
+                  <div className="text-center text-slate-400 mt-8 px-6">
+                    <Sparkles size={32} className="mx-auto mb-3 text-emerald-200" />
+                    <p className="text-sm font-medium">问我任何饮食、营养、热量相关的问题吧。</p>
+                    <p className="text-xs mt-2 text-slate-300">比如："我今天蛋白够吗？""晚上还能吃点什么？"</p>
+                  </div>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-slate-100 text-slate-400 rounded-2xl px-4 py-2.5 text-sm">正在思考…</div>
+                  </div>
+                )}
+              </div>
+
+              {/* input */}
+              <div className="p-4 border-t border-slate-100 shrink-0 flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
+                  placeholder="输入你的问题…"
+                  className="flex-1 px-4 py-3 bg-slate-50 rounded-2xl outline-none font-medium text-sm focus:bg-slate-100 transition-colors"
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="px-5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl transition-colors disabled:opacity-40 text-sm"
+                >
+                  发送
+                </button>
               </div>
             </motion.div>
           </div>
