@@ -179,8 +179,25 @@ async function callDeepSeek(
 // Support JSON bodies for API requests
 app.use(express.json({ limit: '50mb' }));
 
+// Allow the Capacitor native app (origin capacitor://localhost or
+// http://localhost) and the web app to call the API cross-origin.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Health check — visit this URL to confirm which version is live.
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", version: "v1.0-baseline" });
 });
 
 app.post("/api/estimate", async (req, res) => {

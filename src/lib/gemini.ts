@@ -69,6 +69,16 @@ function getProvider(): 'gemini' | 'deepseek' {
   return localStorage.getItem('ai_provider') === 'deepseek' ? 'deepseek' : 'gemini';
 }
 
+// In a web deployment the app and the API share an origin, so a relative
+// path works. Inside a Capacitor native build the app runs from a local
+// origin (capacitor://localhost), so we must call the deployed backend by
+// its full URL. VITE_API_BASE is injected at build time for native builds.
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 function getCustomApiKey() {
   if (typeof window === 'undefined') return null;
   // Use the key matching the selected provider
@@ -81,7 +91,7 @@ function getCustomApiKey() {
 export async function estimateLogNutrition(query: string, imageBase64?: string): Promise<NutritionResult> {
   const customApiKey = getCustomApiKey();
   const provider = getProvider();
-  const response = await fetch('/api/estimate', {
+  const response = await fetch(apiUrl('/api/estimate'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -106,7 +116,7 @@ export async function estimateLogNutrition(query: string, imageBase64?: string):
 export async function estimateLibraryNutrition(query: string, imageBase64?: string): Promise<NutritionResult> {
   const customApiKey = getCustomApiKey();
   const provider = getProvider();
-  const response = await fetch('/api/estimate', {
+  const response = await fetch(apiUrl('/api/estimate'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
