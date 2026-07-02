@@ -22,6 +22,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    flavorDimensions "region"
+    productFlavors {
+        cn {
+            dimension "region"
+            applicationId "com.gymeat.app"
+        }
+        global {
+            dimension "region"
+            applicationId "com.gymeat.global"
+        }
+    }
 }
 
 repositories {

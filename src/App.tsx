@@ -52,6 +52,7 @@ import {
 } from 'recharts';
 import { cn } from './lib/utils';
 import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions, sendChatMessage, ChatMessage } from './lib/gemini';
+import { scoreFood, FoodGrade } from './lib/foodScore';
 import { FoodItem, MacroGoals, DailyLog, LibraryFood, WeightLog, WaterLog, MealType } from './types';
 
 import { auth, db } from './lib/firebase';
@@ -73,6 +74,10 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 
+// Region flag: "cn" hides Google login (unusable in mainland China).
+// Set via VITE_APP_REGION at build time. Defaults to global (login shown).
+const IS_CN_VERSION = (import.meta as any).env?.VITE_APP_REGION === "cn";
+
 const DEFAULT_GOALS: MacroGoals = {
   calories: 2000,
   protein: 150,
@@ -85,6 +90,14 @@ const COLORS = {
   protein: '#a855f7',  // purple-500
   carbs: '#3b82f6',    // blue-500
   fat: '#f97316',      // orange-500
+};
+
+// Food score badge — static class maps so Tailwind keeps them.
+const SCORE_BADGE_STYLES: Record<FoodGrade, string> = {
+  great: 'bg-emerald-50 text-emerald-600',
+  good: 'bg-teal-50 text-teal-600',
+  ok: 'bg-amber-50 text-amber-600',
+  avoid: 'bg-rose-50 text-rose-600',
 };
 
 const MACRO_LABELS = {
@@ -943,7 +956,7 @@ export default function App() {
           
           <div className="flex items-center gap-1.5 sm:gap-2">
             <AnimatePresence mode="wait">
-              {isAuthReady && (
+              {!IS_CN_VERSION && isAuthReady && (
                 user ? (
                   <motion.div 
                     key="user-profile"
@@ -1477,9 +1490,20 @@ export default function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="font-black text-slate-900 text-base sm:text-lg truncate leading-tight">{food.name}</h3>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <span className="text-[10px] sm:text-xs text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-md">{food.amount}</span>
                                 <span className="text-[10px] sm:text-xs text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded-md">{food.calories} kcal</span>
+                                {(() => {
+                                  const s = scoreFood(food, fitnessGoal);
+                                  return (
+                                    <span
+                                      className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`}
+                                      title={s.reason}
+                                    >
+                                      {s.label}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1512,6 +1536,14 @@ export default function App() {
                               <span className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">脂肪</span>
                             </div>
                           </div>
+                          {(() => {
+                            const s = scoreFood(food, fitnessGoal);
+                            return (
+                              <p className="text-[11px] text-slate-400 font-medium mt-2 px-1">
+                                {s.label} · {s.reason}
+                              </p>
+                            );
+                          })()}
                         </motion.div>
                       ))}
                     </motion.div>
