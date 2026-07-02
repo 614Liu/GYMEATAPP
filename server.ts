@@ -188,7 +188,7 @@ app.use((req, res, next) => {
 
 // Health check — visit this URL to confirm which version is live.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "v1.4-foodscore" });
+  res.json({ status: "ok", version: "v1.6-scorefix" });
 });
 
 // ===============================================================
