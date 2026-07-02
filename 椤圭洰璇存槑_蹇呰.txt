@@ -1,0 +1,132 @@
+================================================================
+  健食 GYMEAT — 项目说明书（给未来的自己看）
+  最后更新：v1.3-dualversion
+================================================================
+
+这个文件记录了这个 app 是什么、怎么运行的、怎么改、怎么打包。
+隔久了忘了的时候，先看这个文件。
+
+
+────────────────────────────────────────
+一、这个 app 是什么
+────────────────────────────────────────
+一个 AI 营养记录 app（React + Vite + Express + Firebase）。
+功能：拍照/文字识别食物营养、记录每日热量、AI 营养教练、趋势分析。
+
+技术架构分两半：
+- 前端（界面）：用户看到的所有页面。打包进 app 本地运行。
+- 后端（server.ts）：一个 Express 服务器，负责调 AI（DeepSeek/Gemini）。
+  部署在云上（目前是 onrender）。
+
+关键点：AI 分析必须联网请求后端，后端拿着 API key 去调 AI 再返回。
+手机 app 里只有界面是本地的，AI 那一下要联网。
+
+
+────────────────────────────────────────
+二、线上地址 & 怎么验证版本
+────────────────────────────────────────
+后端部署在 onrender：https://gymeatapp.onrender.com
+GitHub 仓库：github.com/614Liu/GYMEAT-app
+
+验证线上是哪个版本：浏览器打开
+  https://gymeatapp.onrender.com/api/health
+显示 {"status":"ok","version":"vX.X-xxx"} 里的 version 就是当前线上版本。
+
+⚠️ onrender 免费档会休眠，第一次请求 AI 要等几十秒冷启动。属正常。
+
+
+────────────────────────────────────────
+三、AI 引擎（DeepSeek / Gemini）
+────────────────────────────────────────
+app 支持两个 AI 引擎，用户在「设置」里选：
+- DeepSeek：国内可直连，主力。后端默认 key 配在 onrender 环境变量
+  DEEPSEEK_API_KEY 里。
+- Gemini：国内连不上，留给海外/有梯子的人当备选。
+
+app 不直接连 DeepSeek，链路是：app → onrender后端 → DeepSeek → 返回。
+
+
+────────────────────────────────────────
+四、国内版 vs 海外版（双版本）
+────────────────────────────────────────
+一份代码，两个版本，靠打包时的"开关"区分（不是用户选的，是打包时定的）：
+
+- 国内版（cn）：隐藏谷歌登录（国内登不了），包名 com.gymeat.app
+- 海外版（global）：保留谷歌登录，包名 com.gymeat.global
+
+两个包名不同，可以同时装在一台手机上。
+
+
+────────────────────────────────────────
+五、【重要】怎么打包安卓 APK
+────────────────────────────────────────
+前提：电脑装好 Node.js 和 Android Studio。
+
+步骤（以打【国内版】为例）：
+
+1. 解压最新代码，在 GYMEAT-app-main 文件夹打开终端（Shift+右键→在终端打开）
+
+2. 装依赖 + 构建国内版前端：
+     npm install
+     npm run sync:android:cn        ← 国内版用 :cn
+   （海外版则用 npm run sync:android:global）
+
+3. Android Studio → Open → 选 GYMEAT-app-main\android 文件夹
+   等 Gradle Sync 跑完（底部进度条消失）
+
+4. 选版本：Build → Select Build Variant
+   在 Build Variants 面板，把 :app 那行的下拉选成：
+     cnDebug     ← 国内版
+     globalDebug ← 海外版
+   ⚠️ 必须和第2步的 :cn / :global 对上！
+
+5. Build → Generate App Bundles or APKs → Generate APKs
+
+6. APK 位置：
+     国内版：android\app\build\outputs\apk\cn\debug\app-cn-debug.apk
+     海外版：android\app\build\outputs\apk\global\debug\app-global-debug.apk
+
+7. 传手机安装（提示未知来源→允许；同包名会覆盖安装，数据不丢）
+
+
+────────────────────────────────────────
+六、改了东西之后，要更新哪里？（关键原则）
+────────────────────────────────────────
+- 改了后端/AI/网页功能（server.ts、src/ 里的东西）
+    → 更新 GitHub → onrender 自动重新部署
+    → 网页版立刻生效；手机 app 需重新打包 APK 才有
+
+- 只改了 app 外壳（闪屏、图标、app 名字，在 android/ 文件夹里）
+    → onrender 不用动，只重新打包 APK
+
+- 换后端服务器地址
+    → 改 package.json 里 VITE_API_BASE，且要重新打包 APK
+
+
+────────────────────────────────────────
+七、已知的坑 & 解决过的问题
+────────────────────────────────────────
+- 启动闪屏大logo：安卓12+系统启动画面，已用 splash_icon_none 盖成纯色
+- 地址栏（套壳时出现）：改用 Capacitor 打包，本地运行就没有了
+- 谷歌登录 app 里报 invalid：Google 禁止 WebView 内登录，国内版已隐藏
+- package.json 曾被传错内容：确保它是 { 开头的 JSON
+
+
+────────────────────────────────────────
+八、以后可以做的事（另有独立笔记）
+────────────────────────────────────────
+- FUTURE_RAG.md              给 AI 教练投喂 PDF 知识库
+- FUTURE_SERVER_MIGRATION.md 换国内服务器（顺便解决冷启动）
+- 正式发布：现在是 debug 版（自己用/发朋友够了）。
+  要上架应用商店需打 release 版 + 正式签名，到时再研究。
+
+
+────────────────────────────────────────
+九、版本历史
+────────────────────────────────────────
+- v1.0-baseline    干净基线（DeepSeek + CORS + PWA + logo + Capacitor）
+- v1.1-aicoach     AI 教练（每日小提示 + 下一餐推荐）
+- v1.2-chat        AI 教练对话窗（防跑题）+ 卡片改独立浅色
+- v1.3-dualversion 国内/海外双版本（国内隐藏谷歌登录）
+
+================================================================
