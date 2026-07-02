@@ -52,7 +52,7 @@ import {
 } from 'recharts';
 import { cn } from './lib/utils';
 import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions, sendChatMessage, ChatMessage } from './lib/gemini';
-import { scoreFood, FoodGrade } from './lib/foodScore';
+import { scoreFood, scoreLibraryFood, FoodGrade } from './lib/foodScore';
 import { FoodItem, MacroGoals, DailyLog, LibraryFood, WeightLog, WaterLog, MealType } from './types';
 
 import { auth, db } from './lib/firebase';
@@ -1933,6 +1933,22 @@ export default function App() {
                           <MacroBadge label="碳水" value={estimatedResult.carbs || 0} color="blue" />
                           <MacroBadge label="脂肪" value={estimatedResult.fat || 0} color="orange" />
                         </div>
+                        {(() => {
+                          const s = scoreFood({
+                            calories: estimatedResult.calories || 0,
+                            protein: estimatedResult.protein || 0,
+                            carbs: estimatedResult.carbs || 0,
+                            fat: estimatedResult.fat || 0,
+                          }, fitnessGoal);
+                          return (
+                            <div className="flex items-center gap-2 px-1">
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${SCORE_BADGE_STYLES[s.grade]}`}>
+                                {s.label}
+                              </span>
+                              <span className="text-xs text-emerald-700/70 font-medium">{s.reason}</span>
+                            </div>
+                          );
+                        })()}
                         <div className="grid grid-cols-2 gap-3">
                           <motion.button 
                             onClick={() => handleAddFood(estimatedResult)}
@@ -1991,7 +2007,17 @@ export default function App() {
                           >
                             <div className="text-left flex-1 pr-2">
                               <h4 className="font-black text-slate-900 text-sm sm:text-base line-clamp-1">{food.name}</h4>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">每 100g / {food.caloriesPer100g} kcal</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">每 100g / {food.caloriesPer100g} kcal</p>
+                                {(() => {
+                                  const s = scoreLibraryFood(food, fitnessGoal);
+                                  return (
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`} title={s.reason}>
+                                      {s.label}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </div>
                             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                               <button 
@@ -2804,9 +2830,19 @@ export default function App() {
                         <div key={food.id} className="p-4 sm:p-5 bg-white/60 backdrop-blur-md rounded-[2rem] border border-white/50 flex items-center justify-between group transition-all shadow-[0_4px_15px_rgb(0,0,0,0.02)]">
                           <div className="flex-1 pr-2">
                             <h4 className="font-black text-slate-900 text-sm sm:text-base line-clamp-1">{food.name}</h4>
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">
-                              {food.caloriesPer100g} kcal / 100g
-                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                                {food.caloriesPer100g} kcal / 100g
+                              </p>
+                              {(() => {
+                                const s = scoreLibraryFood(food, fitnessGoal);
+                                return (
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`} title={s.reason}>
+                                    {s.label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <button 
