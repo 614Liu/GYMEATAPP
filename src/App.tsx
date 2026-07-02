@@ -2597,6 +2597,7 @@ export default function App() {
                 >
                   保存修改
                 </motion.button>
+                <p className="text-center text-[11px] text-slate-300 font-bold mt-4">健食 GYMEAT · v1.6</p>
               </div>
             </motion.div>
           </div>
