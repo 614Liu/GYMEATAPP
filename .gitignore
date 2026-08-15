@@ -1,0 +1,21 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# 安卓构建产物（android/ 工程本身要提交，产物不要）
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/src/main/assets/public/
+
+# 编辑器 / 工具
+.vscode/
+.idea/
+.claude/

@@ -89,6 +89,8 @@ function buildContents(query: string, imageBase64: string | undefined, isLibrary
 // where Gemini is not reachable.
 // ===============================================================
 
+const DEEPSEEK_MODEL = "deepseek-v4-flash";
+
 function isValidDeepSeekKey(key: string) {
   // DeepSeek keys start with "sk-"
   return typeof key === "string" && key.trim().startsWith("sk-");
@@ -139,7 +141,8 @@ async function callDeepSeek(
 ): Promise<string> {
   const messages = buildDeepSeekMessages(query, imageBase64, isLibrary, systemInstruction);
   // deepseek-v4-flash supersedes the deprecated deepseek-chat name (deprecated 2026/07/24)
-  const model = imageBase64 ? "deepseek-v4-flash" : "deepseek-v4-flash";
+  // and handles both text and vision, so there is no per-mode model split.
+  const model = DEEPSEEK_MODEL;
 
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -171,24 +174,74 @@ async function callDeepSeek(
   return data?.choices?.[0]?.message?.content || "";
 }
 
-// Support JSON bodies for API requests
-app.use(express.json({ limit: '50mb' }));
+// Support JSON bodies for API requests.
+// Images are client-side compressed to 600px / JPEG q0.6 (~50-150KB as base64),
+// so 8mb is generous. The old 50mb let a single request tie up the free-tier box.
+app.use(express.json({ limit: '8mb' }));
 
-// Allow the Capacitor native app (origin capacitor://localhost or
-// http://localhost) and the web app to call the API cross-origin.
+// CORS allowlist. The native app runs from capacitor://localhost or
+// http://localhost; the web app runs from our own domain(s). Everything
+// else is rejected so third-party sites can't call this API (which would
+// let them abuse the default API key).
+const ALLOWED_ORIGINS = new Set([
+  'capacitor://localhost',
+  'http://localhost',
+  'https://localhost',
+  'ionic://localhost',
+  'https://gymeatapp.onrender.com',
+]);
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.headers.origin;
+  // Native WebViews sometimes send no Origin header at all — allow those
+  // (a browser-based cross-site attacker always sends an Origin).
+  if (!origin || ALLOWED_ORIGINS.has(origin)) {
+    if (origin) res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+  }
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
   next();
 });
 
+// Rate limit for the AI endpoints. These spend the server's default API key,
+// and the CORS check lets through requests with no Origin (native WebViews),
+// so without this anyone who knows the URL could drain the quota.
+// In-memory and per-instance — good enough for a single small box.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const rateBuckets = new Map<string, number[]>();
+
+app.use("/api/", (req, res, next) => {
+  if (req.method === "OPTIONS" || req.path === "/health") return next();
+
+  const ip = (req.headers["x-forwarded-for"] as string || "").split(",")[0].trim()
+    || req.socket.remoteAddress
+    || "unknown";
+  const now = Date.now();
+  const hits = (rateBuckets.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+
+  if (hits.length >= RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "请求过于频繁，请稍后再试。" });
+  }
+
+  hits.push(now);
+  rateBuckets.set(ip, hits);
+
+  // Keep the map from growing without bound on a long-lived process
+  if (rateBuckets.size > 5000) {
+    for (const [key, times] of rateBuckets) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) rateBuckets.delete(key);
+    }
+  }
+  next();
+});
+
 // Health check — visit this URL to confirm which version is live.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "v1.6-scorefix" });
+  res.json({ status: "ok", version: "v1.9-refactor-hardening" });
 });
 
 // ===============================================================
@@ -242,7 +295,7 @@ app.post("/api/coach", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${dsKey}` },
         body: JSON.stringify({
-          model: "deepseek-v4-flash",
+          model: DEEPSEEK_MODEL,
           messages: [
             { role: "system", content: systemInstruction },
             { role: "user", content: prompt },
@@ -335,7 +388,7 @@ app.post("/api/chat", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${dsKey}` },
         body: JSON.stringify({
-          model: "deepseek-v4-flash",
+          model: DEEPSEEK_MODEL,
           messages: [{ role: "system", content: systemPrompt }, ...messages],
           temperature: 0.7,
         }),
@@ -477,14 +530,18 @@ app.post("/api/estimate", async (req, res) => {
           lastError = err;
           const errMsg = err.message || String(err || "");
           
-          // Terminal credentials or query bad parameters error -> Fail Fast
-          const isTerminalAuthError = 
-            err.status === 400 || 
-            errMsg.includes("API key not valid") || 
-            errMsg.includes("API_KEY_INVALID") || 
+          // Terminal credentials or bad-parameter error -> fail fast.
+          // Match only real auth/argument signals: a bare "invalid" appears in
+          // plenty of transient errors and would wrongly skip the fallback models.
+          const isTerminalAuthError =
+            err.status === 400 ||
+            err.status === 401 ||
+            err.status === 403 ||
+            errMsg.includes("API key not valid") ||
+            errMsg.includes("API_KEY_INVALID") ||
             errMsg.includes("INVALID_ARGUMENT") ||
-            errMsg.toLowerCase().includes("api key") ||
-            errMsg.toLowerCase().includes("invalid");
+            errMsg.includes("PERMISSION_DENIED") ||
+            /invalid\s+api\s+key/i.test(errMsg);
 
           if (isTerminalAuthError) {
             console.warn(`[Gemini API Error] Terminal auth/parameter error using ${modelName}. Stopping attempts.`);

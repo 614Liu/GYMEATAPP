@@ -11,17 +11,13 @@ import {
   Trash2,
   ChevronRight,
   ChevronLeft,
-  Loader2,
   Check,
   X,
-  Camera,
-  Image as ImageIcon,
   Coffee,
   Sun,
   Moon,
   Cookie,
   Scale,
-  Leaf,
   TrendingUp,
   GlassWater,
   Calendar,
@@ -31,7 +27,6 @@ import {
   Info,
   Sparkles,
   Lightbulb,
-  Utensils,
   RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence, animate } from 'motion/react';
@@ -50,9 +45,26 @@ import {
   YAxis, 
   CartesianGrid 
 } from 'recharts';
-import { cn } from './lib/utils';
+import { cn, parseLocalDate } from './lib/utils';
+import { AnimatedNumber } from './components/ui/AnimatedNumber';
+import { MacroStat } from './components/ui/MacroStat';
+import { CustomCursor, CustomActiveDot } from './components/ui/ChartHelpers';
+import { IS_CN_VERSION, DEFAULT_GOALS, COLORS, SCORE_BADGE_STYLES, MACRO_LABELS } from './constants';
+import { compressImage } from './lib/image';
+import { LogoutModal } from './components/modals/LogoutModal';
+import { WeightModal } from './components/modals/WeightModal';
+import { EditFoodModal } from './components/modals/EditFoodModal';
+import { EditLibraryFoodModal } from './components/modals/EditLibraryFoodModal';
+import { ChatModal } from './components/modals/ChatModal';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { FoodLibraryModal } from './components/modals/FoodLibraryModal';
+import { AiTab } from './components/modals/addfood/AiTab';
+import { LibraryTab } from './components/modals/addfood/LibraryTab';
+import { ManualTab } from './components/modals/addfood/ManualTab';
+import { getAutoCalories, parseAmount } from './lib/nutrition';
+import { mergeByKey, mergeLogs, libraryKey, dateKey } from './lib/sync';
 import { estimateLogNutrition, estimateLibraryNutrition, NutritionResult, parseAiError, getDailyTip, getMealSuggestions, sendChatMessage, ChatMessage } from './lib/gemini';
-import { scoreFood, scoreLibraryFood, FoodGrade } from './lib/foodScore';
+import { scoreFood } from './lib/foodScore';
 import { FoodItem, MacroGoals, DailyLog, LibraryFood, WeightLog, WaterLog, MealType } from './types';
 
 import { auth, db } from './lib/firebase';
@@ -65,82 +77,12 @@ import {
 import { 
   doc, 
   setDoc, 
-  getDoc, 
-  onSnapshot, 
-  collection, 
-  query, 
-  orderBy,
-  getDocFromServer,
+  onSnapshot,
+  collection,
   deleteDoc
 } from 'firebase/firestore';
 
-// Region flag: "cn" hides Google login (unusable in mainland China).
-// Set via VITE_APP_REGION at build time. Defaults to global (login shown).
-const IS_CN_VERSION = (import.meta as any).env?.VITE_APP_REGION === "cn";
-
-const DEFAULT_GOALS: MacroGoals = {
-  calories: 2000,
-  protein: 150,
-  carbs: 200,
-  fat: 65,
-};
-
-const COLORS = {
-  calories: '#10B981', // emerald-500
-  protein: '#a855f7',  // purple-500
-  carbs: '#3b82f6',    // blue-500
-  fat: '#f97316',      // orange-500
-};
-
-// Food score badge — static class maps so Tailwind keeps them.
-const SCORE_BADGE_STYLES: Record<FoodGrade, string> = {
-  great: 'bg-emerald-50 text-emerald-600',
-  good: 'bg-teal-50 text-teal-600',
-  ok: 'bg-amber-50 text-amber-600',
-  avoid: 'bg-rose-50 text-rose-600',
-};
-
-const MACRO_LABELS = {
-  protein: '蛋白质',
-  carbs: '碳水',
-  fat: '脂肪',
-  calories: '热量'
-};
-
-const CustomCursor = (props: any) => {
-  const { points, height, stroke = "#10b981" } = props;
-  if (!points || points.length === 0) return null;
-  const { x } = points[0];
-  return (
-    <motion.line
-      animate={{ x1: x, x2: x, y1: 0, y2: height }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      stroke={stroke}
-      strokeWidth={2}
-      strokeDasharray="4 4"
-      strokeOpacity={0.5}
-    />
-  );
-};
-
-const CustomActiveDot = (props: any) => {
-  const { cx, cy, fill, shadowColor } = props;
-  if (!cx || !cy) return null;
-  return (
-    <motion.circle
-      animate={{ cx, cy }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      r={6}
-      fill={fill}
-      stroke="#fff"
-      strokeWidth={3}
-      style={{ filter: `drop-shadow(0px 4px 8px ${shadowColor})` }}
-    />
-  );
-};
-
 export default function App() {
-  console.log("App Rendering - showSplash:", true); // Initial log
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -227,6 +169,7 @@ export default function App() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [estimatedResult, setEstimatedResult] = useState<NutritionResult | null>(null);
+  const [portionMult, setPortionMult] = useState(1); // 份量倍数，用户可调
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [apiKey, setApiKey] = useState(() => {
@@ -285,6 +228,18 @@ export default function App() {
     return logs.find(l => l.date === todayStr) || { date: todayStr, foods: [] };
   }, [logs, todayStr]);
 
+  // 清理过期的按天缓存（AI 小建议、对话记录）。这两类 key 每天都会新增一条，
+  // 不清理会一直堆在 localStorage 里，只保留最近 7 天。
+  useEffect(() => {
+    try {
+      const cutoff = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+      for (const key of Object.keys(localStorage)) {
+        const m = key.match(/^jianshi_(?:tip|chat)_(\d{4}-\d{2}-\d{2})/);
+        if (m && m[1] < cutoff) localStorage.removeItem(key);
+      }
+    } catch (e) { /* 隐私模式下 localStorage 可能不可用，忽略 */ }
+  }, []);
+
   // Firebase Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -306,20 +261,6 @@ export default function App() {
     };
   }, []);
 
-  // Test Connection
-  useEffect(() => {
-    async function testConnection() {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    }
-    testConnection();
-  }, []);
-
   // Firestore Real-time Sync: Goals & User Profile
   useEffect(() => {
     if (!user) return;
@@ -338,14 +279,41 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // 本地数据的镜像。onSnapshot 回调里要读「当前本地值」来做合并，但副作用不能写在
+  // setState 的 updater 里（StrictMode 会双调用），所以用 ref 读、在外面算好再 setState。
+  const localDataRef = useRef({ logs, library, weightLogs, waterLogs });
+  useEffect(() => {
+    localDataRef.current = { logs, library, weightLogs, waterLogs };
+  }, [logs, library, weightLogs, waterLogs]);
+
+  // 每类数据「本次登录是否已做过首次合并」。合并只做一次，之后云端为准，
+  // 否则别的设备删掉的条目会被本地残留一直复活。
+  const mergedOnce = useRef({ logs: false, library: false, weight: false, water: false });
+  useEffect(() => {
+    mergedOnce.current = { logs: false, library: false, weight: false, water: false };
+  }, [user]);
+
   // Firestore Real-time Sync: Library
   useEffect(() => {
     if (!user) return;
-    const libraryRef = collection(db, 'users', user.uid, 'library');
-    const unsubscribe = onSnapshot(libraryRef, (snapshot) => {
-      const items = snapshot.docs.map(doc => doc.data() as LibraryFood);
-      items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      setLibrary(items);
+    const unsubscribe = onSnapshot(collection(db, 'users', user.uid, 'library'), (snapshot) => {
+      const remote = snapshot.docs.map(d => d.data() as LibraryFood);
+      const sortByNewest = (items: LibraryFood[]) =>
+        [...items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      if (mergedOnce.current.library) {
+        setLibrary(sortByNewest(remote));
+        return;
+      }
+      mergedOnce.current.library = true;
+
+      const { merged, localOnly } = mergeByKey(remote, localDataRef.current.library, libraryKey);
+      setLibrary(sortByNewest(merged));
+      // 本地独有的条目回传云端，下一次快照就会包含它们
+      for (const item of localOnly) {
+        setDoc(doc(db, 'users', user.uid, 'library', item.id), { ...item, ownerUid: user.uid })
+          .catch(err => console.error("Library backfill error:", err));
+      }
     }, (error) => {
       console.error("Firestore Error (Library):", error);
     });
@@ -355,10 +323,26 @@ export default function App() {
   // Firestore Real-time Sync: Logs
   useEffect(() => {
     if (!user) return;
-    const logsRef = collection(db, 'users', user.uid, 'logs');
-    const unsubscribe = onSnapshot(logsRef, (snapshot) => {
-      const allLogs = snapshot.docs.map(doc => doc.data() as DailyLog);
-      setLogs(allLogs);
+    const unsubscribe = onSnapshot(collection(db, 'users', user.uid, 'logs'), (snapshot) => {
+      const remote = snapshot.docs.map(d => d.data() as DailyLog);
+
+      if (mergedOnce.current.logs) {
+        setLogs(remote);
+        return;
+      }
+      mergedOnce.current.logs = true;
+
+      const { merged, changedDates } = mergeLogs(remote, localDataRef.current.logs);
+      setLogs(merged);
+      for (const date of changedDates) {
+        const dayLog = merged.find(l => l.date === date);
+        if (!dayLog) continue;
+        setDoc(doc(db, 'users', user.uid, 'logs', date), {
+          date,
+          ownerUid: user.uid,
+          foods: dayLog.foods
+        }, { merge: true }).catch(err => console.error("Logs backfill error:", err));
+      }
     }, (error) => {
       console.error("Firestore Error (Logs):", error);
     });
@@ -368,10 +352,21 @@ export default function App() {
   // Firestore Real-time Sync: Weight Logs
   useEffect(() => {
     if (!user) return;
-    const weightRef = collection(db, 'users', user.uid, 'weightLogs');
-    const unsubscribe = onSnapshot(weightRef, (snapshot) => {
-      const allWeight = snapshot.docs.map(doc => doc.data() as WeightLog);
-      setWeightLogs(allWeight);
+    const unsubscribe = onSnapshot(collection(db, 'users', user.uid, 'weightLogs'), (snapshot) => {
+      const remote = snapshot.docs.map(d => d.data() as WeightLog);
+
+      if (mergedOnce.current.weight) {
+        setWeightLogs(remote);
+        return;
+      }
+      mergedOnce.current.weight = true;
+
+      const { merged, localOnly } = mergeByKey(remote, localDataRef.current.weightLogs, dateKey);
+      setWeightLogs(merged);
+      for (const item of localOnly) {
+        setDoc(doc(db, 'users', user.uid, 'weightLogs', item.date), { ...item, ownerUid: user.uid })
+          .catch(err => console.error("Weight backfill error:", err));
+      }
     }, (error) => {
       console.error("Firestore Error (Weight):", error);
     });
@@ -381,10 +376,21 @@ export default function App() {
   // Firestore Real-time Sync: Water Logs
   useEffect(() => {
     if (!user) return;
-    const waterRef = collection(db, 'users', user.uid, 'waterLogs');
-    const unsubscribe = onSnapshot(waterRef, (snapshot) => {
-      const allWater = snapshot.docs.map(doc => doc.data() as WaterLog);
-      setWaterLogs(allWater);
+    const unsubscribe = onSnapshot(collection(db, 'users', user.uid, 'waterLogs'), (snapshot) => {
+      const remote = snapshot.docs.map(d => d.data() as WaterLog);
+
+      if (mergedOnce.current.water) {
+        setWaterLogs(remote);
+        return;
+      }
+      mergedOnce.current.water = true;
+
+      const { merged, localOnly } = mergeByKey(remote, localDataRef.current.waterLogs, dateKey);
+      setWaterLogs(merged);
+      for (const item of localOnly) {
+        setDoc(doc(db, 'users', user.uid, 'waterLogs', item.date), { ...item, ownerUid: user.uid })
+          .catch(err => console.error("Water backfill error:", err));
+      }
     }, (error) => {
       console.error("Firestore Error (Water):", error);
     });
@@ -441,28 +447,19 @@ export default function App() {
     }
   }, [waterLogs]);
 
+  /** 把某一天的食物列表写回 Firestore（未登录时是空操作） */
+  const syncDayLog = (date: string, foods: FoodItem[], errLabel: string) => {
+    if (!user) return;
+    setDoc(doc(db, 'users', user.uid, 'logs', date), {
+      date,
+      ownerUid: user.uid,
+      foods
+    }, { merge: true }).catch(err => console.error(errLabel, err));
+  };
+
   const handleAddFood = async (food: Omit<FoodItem, 'id' | 'timestamp' | 'mealType' | 'amountValue' | 'baseNutrition'>) => {
-    let amountVal = 100;
-    let isGram = true;
-    
-    // Attempt to extract explicit gram value (e.g., "1个 (约150g)", "200克")
-    const amountStr = food.amount || "100g";
-    const gramMatch = amountStr.match(/(\d+(?:\.\d+)?)\s*(?:g|克)/i);
-    if (gramMatch) {
-      amountVal = Number(gramMatch[1]);
-      isGram = true;
-    } else {
-      // If no gram unit found, look for any number (e.g., "1 份", "2 个")
-      const anyNumMatch = amountStr.match(/(\d+(?:\.\d+)?)/);
-      if (anyNumMatch) {
-        amountVal = Number(anyNumMatch[1]);
-        isGram = false; // Usually it's pieces/portions if no gram is mentioned
-      } else {
-        // Fallback
-        isGram = amountStr.toLowerCase().includes('g') || amountStr.toLowerCase().includes('克');
-      }
-    }
-    
+    const { value: amountVal, isGram } = parseAmount(food.amount);
+
     // For grams, baseNutrition is per 100g. For units, baseNutrition is per 1 unit.
     const ratio = isGram ? (100 / amountVal) : (1 / amountVal);
 
@@ -481,36 +478,22 @@ export default function App() {
       }
     };
 
-    // Optimistic Update
-    setLogs(prev => {
-      const existingLogIndex = prev.findIndex(l => l.date === todayStr);
-      let newLogs = [...prev];
-      let updatedFoods: FoodItem[] = [];
+    // Optimistic Update（先算好新数据，再 setState + 同步，避免在 updater 里做副作用）
+    const prevLogs = localDataRef.current.logs;
+    const existingLogIndex = prevLogs.findIndex(l => l.date === todayStr);
+    const updatedFoods: FoodItem[] = existingLogIndex >= 0
+      ? [newFood, ...prevLogs[existingLogIndex].foods]
+      : [newFood];
 
-      if (existingLogIndex >= 0) {
-        updatedFoods = [newFood, ...newLogs[existingLogIndex].foods];
-        newLogs[existingLogIndex] = {
-          ...newLogs[existingLogIndex],
-          foods: updatedFoods
-        };
-      } else {
-        updatedFoods = [newFood];
-        newLogs.push({ date: todayStr, foods: updatedFoods });
-      }
+    const newLogs = [...prevLogs];
+    if (existingLogIndex >= 0) {
+      newLogs[existingLogIndex] = { ...newLogs[existingLogIndex], foods: updatedFoods };
+    } else {
+      newLogs.push({ date: todayStr, foods: updatedFoods });
+    }
+    setLogs(newLogs);
+    syncDayLog(todayStr, updatedFoods, "Add food sync error");
 
-      // Sync to Firestore if user is logged in
-      if (user) {
-        const logRef = doc(db, 'users', user.uid, 'logs', todayStr);
-        setDoc(logRef, {
-          date: todayStr,
-          ownerUid: user.uid,
-          foods: updatedFoods
-        }, { merge: true }).catch(err => console.error("Add food sync error:", err));
-      }
-
-      return newLogs;
-    });
-    
     setIsAddModalOpen(false);
     setEstimatedResult(null);
     setAiQuery('');
@@ -563,37 +546,22 @@ export default function App() {
     });
   };
 
-  const getAutoCalories = (p: string | number, c: string | number, f: string | number) => {
-    const protein = typeof p === 'string' ? parseFloat(p) || 0 : p;
-    const carbs = typeof c === 'string' ? parseFloat(c) || 0 : c;
-    const fat = typeof f === 'string' ? parseFloat(f) || 0 : f;
-    return Math.round(protein * 4 + carbs * 4 + fat * 9);
-  };
-
   const handleUpdateFood = async (updatedFood: FoodItem) => {
     if (!updatedFood) return;
 
-    setLogs(prev => {
-      const logIndex = prev.findIndex(l => l.date === todayStr);
-      if (logIndex === -1) return prev;
-      
-      const newFoods = prev[logIndex].foods.map(f => f.id === updatedFood.id ? updatedFood : f);
-      
-      // Sync to Firestore if user is logged in
-      if (user) {
-        const logRef = doc(db, 'users', user.uid, 'logs', todayStr);
-        setDoc(logRef, { 
-          date: todayStr,
-          foods: newFoods,
-          ownerUid: user.uid 
-        }, { merge: true }).catch(err => console.error("Sync error:", err));
-      }
-      
-      const newLogs = [...prev];
-      newLogs[logIndex] = { ...newLogs[logIndex], foods: newFoods };
-      return newLogs;
-    });
-    
+    const prevLogs = localDataRef.current.logs;
+    const logIndex = prevLogs.findIndex(l => l.date === todayStr);
+    if (logIndex === -1) {
+      setEditingFood(null);
+      return;
+    }
+
+    const newFoods = prevLogs[logIndex].foods.map(f => f.id === updatedFood.id ? updatedFood : f);
+    const newLogs = [...prevLogs];
+    newLogs[logIndex] = { ...newLogs[logIndex], foods: newFoods };
+
+    setLogs(newLogs);
+    syncDayLog(todayStr, newFoods, "Update food sync error:");
     setEditingFood(null);
   };
 
@@ -620,25 +588,16 @@ export default function App() {
   };
 
   const handleRemoveFood = async (id: string) => {
-    setLogs(prev => {
-      const logIndex = prev.findIndex(l => l.date === todayStr);
-      if (logIndex === -1) return prev;
-      
-      const newFoods = prev[logIndex].foods.filter(f => f.id !== id);
-      
-      if (user) {
-        const logRef = doc(db, 'users', user.uid, 'logs', todayStr);
-        setDoc(logRef, { 
-          date: todayStr,
-          foods: newFoods,
-          ownerUid: user.uid 
-        }, { merge: true }).catch(err => console.error("Remove sync error:", err));
-      }
-      
-      const newLogs = [...prev];
-      newLogs[logIndex] = { ...newLogs[logIndex], foods: newFoods };
-      return newLogs;
-    });
+    const prevLogs = localDataRef.current.logs;
+    const logIndex = prevLogs.findIndex(l => l.date === todayStr);
+    if (logIndex === -1) return;
+
+    const newFoods = prevLogs[logIndex].foods.filter(f => f.id !== id);
+    const newLogs = [...prevLogs];
+    newLogs[logIndex] = { ...newLogs[logIndex], foods: newFoods };
+
+    setLogs(newLogs);
+    syncDayLog(todayStr, newFoods, "Remove sync error:");
     setToast({ message: '已删除记录', type: 'info' });
   };
 
@@ -689,23 +648,36 @@ export default function App() {
     }
   };
 
-  const handleSendChat = async () => {
-    const text = chatInput.trim();
+  const handleSendChat = async (presetText?: string) => {
+    const text = (presetText ?? chatInput).trim();
     if (!text || chatLoading) return;
     const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: text }];
     setChatMessages(newMessages);
-    setChatInput('');
+    if (!presetText) setChatInput('');
     setChatLoading(true);
     try {
       const recentFoods = (todayLog?.foods || []).slice(0, 15).map((f: any) => ({ name: f.name, calories: f.calories }));
       const reply = await sendChatMessage(newMessages, { goal: fitnessGoal, totals, goals, recentFoods });
-      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      const updated: ChatMessage[] = [...newMessages, { role: 'assistant', content: reply }];
+      setChatMessages(updated);
+      // 按天保存对话到本地
+      try { localStorage.setItem(`jianshi_chat_${todayStr}`, JSON.stringify(updated)); } catch (e) {}
     } catch (e: any) {
       setChatMessages(prev => [...prev, { role: 'assistant', content: parseAiError(e?.message || String(e)) }]);
     } finally {
       setChatLoading(false);
     }
   };
+
+  // 打开对话/切换日期时，加载当天已保存的对话
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`jianshi_chat_${todayStr}`);
+      setChatMessages(saved ? JSON.parse(saved) : []);
+    } catch (e) {
+      setChatMessages([]);
+    }
+  }, [todayStr]);
 
   // Auto-load cached tip when date/goal changes
   useEffect(() => {
@@ -761,7 +733,7 @@ export default function App() {
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-7)
       .map(l => ({
-        date: format(new Date(l.date), 'MM/dd'),
+        date: format(parseLocalDate(l.date), 'MM/dd'),
         weight: l.weight
       }));
   }, [weightLogs]);
@@ -782,7 +754,7 @@ export default function App() {
       }), { calories: 0, protein: 0, carbs: 0, fat: 0 }) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
       return {
-        date: format(new Date(date), 'MM/dd'),
+        date: format(parseLocalDate(date), 'MM/dd'),
         ...dayTotals
       };
     });
@@ -821,6 +793,7 @@ export default function App() {
         return;
       }
       setEstimatedResult(result);
+      setPortionMult(1);
     } catch (err: any) {
       console.error("AI Estimation failed:", err);
       const errorMessage = parseAiError(err);
@@ -830,37 +803,73 @@ export default function App() {
     }
   };
 
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const MAX_SIZE = 600;
-          
-          if (width > height && width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          } else if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
-        };
-        img.onerror = (e) => reject(e);
-      };
-      reader.onerror = (e) => reject(e);
-    });
+  /**
+   * AI 识别结果的「存入库中」：写进食物库并跳转到食物库弹窗。
+   *
+   * 注意：记录用的识别（isLibrary=false）返回的是「该份量的总营养」，而食物库存的是
+   * 「每 100g」。份量是克时按比例换算；是「1个中等大小」这类没有克重的份量时无法换算，
+   * 只能原样存下并提示用户核对。
+   */
+  const handleSaveEstimateToLibrary = async (result: NutritionResult) => {
+    const foodId = crypto.randomUUID();
+    const { value, isGram } = parseAmount(result.amount);
+    const ratio = isGram && value > 0 ? 100 / value : 1;
+
+    const newFood: LibraryFood = {
+      id: foodId,
+      name: result.name || "未命名食物",
+      caloriesPer100g: Math.round((result.calories || 0) * ratio),
+      proteinPer100g: Number(((result.protein || 0) * ratio).toFixed(1)),
+      carbsPer100g: Number(((result.carbs || 0) * ratio).toFixed(1)),
+      fatPer100g: Number(((result.fat || 0) * ratio).toFixed(1)),
+      createdAt: Date.now()
+    };
+
+    setLibrary(prev => [newFood, ...prev]);
+
+    if (user) {
+      const foodRef = doc(db, 'users', user.uid, 'library', foodId);
+      setDoc(foodRef, { ...newFood, ownerUid: user.uid }).catch(err => console.error("Library sync error:", err));
+    }
+
+    setToast(
+      isGram
+        ? { message: `已保存 ${newFood.name} 到食物库`, type: 'success' }
+        : { message: `已保存 ${newFood.name}，但「${result.amount}」无法换算成每 100g，请核对`, type: 'info' }
+    );
+    setIsAddModalOpen(false);
+    setIsLibraryOpen(true);
+  };
+
+  /** 食物库里的「相册识别 / 拍照识别」：识别营养表，填入每 100g 的草稿表单 */
+  const handleLibraryImageSelect = async (file: File) => {
+    setIsEstimating(true);
+    setError(null);
+    try {
+      const compressedBase64 = await compressImage(file);
+      const result = await estimateLibraryNutrition("请识别营养表并返回每100g的数值", compressedBase64);
+
+      if (!result.isFood) {
+        setError(result.reason || "未能识别出食物或营养表，请换张图片");
+        setIsEstimating(false);
+        return;
+      }
+
+      setLibraryEntry({
+        name: result.name || "未命名食物",
+        calories: result.calories ? Math.round(result.calories).toString() : "0",
+        protein: result.protein ? result.protein.toFixed(1) : "0",
+        carbs: result.carbs ? result.carbs.toFixed(1) : "0",
+        fat: result.fat ? result.fat.toFixed(1) : "0",
+        amount: '100'
+      });
+    } catch (err: any) {
+      console.error("识别失败", err);
+      const errorMessage = parseAiError(err);
+      setError(errorMessage);
+    } finally {
+      setIsEstimating(false);
+    }
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -876,13 +885,11 @@ export default function App() {
     }
   };
 
-  const chartData = [
-    { name: 'Protein', value: Math.round((totals?.protein || 0) * 4), color: COLORS.protein },
-    { name: 'Carbs', value: Math.round((totals?.carbs || 0) * 4), color: COLORS.carbs },
-    { name: 'Fat', value: Math.round((totals?.fat || 0) * 9), color: COLORS.fat },
-  ].filter(d => d.value > 0);
-
-  console.log("App Rendering - totals:", totals);
+  const chartData = useMemo(() => [
+    { name: 'protein', value: Math.round((totals?.protein || 0) * 4), color: COLORS.protein },
+    { name: 'carbs', value: Math.round((totals?.carbs || 0) * 4), color: COLORS.carbs },
+    { name: 'fat', value: Math.round((totals?.fat || 0) * 9), color: COLORS.fat },
+  ].filter(d => d.value > 0), [totals]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-emerald-100 select-none [-webkit-touch-callout:none]">
@@ -1300,39 +1307,14 @@ export default function App() {
             </button>
           )}
 
-          {/* action buttons */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              onClick={fetchMealSuggestions}
-              disabled={mealLoading}
-              className="flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-2xl transition-colors disabled:opacity-60 text-sm"
-            >
-              <Utensils size={15} />
-              {mealLoading ? '搭配中…' : '下一餐吃啥'}
-            </button>
-            <button
-              onClick={() => setIsChatOpen(true)}
-              className="flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-black py-3 rounded-2xl transition-colors text-sm"
-            >
-              <Sparkles size={15} />
-              问教练
-            </button>
-          </div>
-
-          {/* meal suggestions */}
-          {mealSuggestions.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {mealSuggestions.map((s, i) => (
-                <div key={i} className="bg-slate-50 rounded-2xl p-3.5">
-                  <div className="flex justify-between items-center mb-0.5">
-                    <span className="font-black text-sm text-slate-900">{s.name}</span>
-                    <span className="text-xs text-emerald-600 font-bold">{Math.round(s.calories)} kcal · 蛋白 {Math.round(s.protein)}g</span>
-                  </div>
-                  {s.reason && <p className="text-xs text-slate-500">{s.reason}</p>}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* action button */}
+          <button
+            onClick={() => setIsChatOpen(true)}
+            className="w-full flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-black py-3 rounded-2xl transition-colors text-sm"
+          >
+            <Sparkles size={15} />
+            问教练 · 聊聊今天吃什么
+          </button>
         </motion.section>
 
         <div className="grid grid-cols-2 gap-4">
@@ -1470,7 +1452,9 @@ export default function App() {
                         <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{mealLabels[mealType]}</span>
                         <div className="flex-1 h-px bg-slate-100 ml-2" />
                       </div>
-                      {mealFoods.map((food) => (
+                      {mealFoods.map((food) => {
+                        const score = scoreFood(food, fitnessGoal);
+                        return (
                         <motion.div
                           key={food.id}
                           layout
@@ -1493,17 +1477,12 @@ export default function App() {
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <span className="text-[10px] sm:text-xs text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded-md">{food.amount}</span>
                                 <span className="text-[10px] sm:text-xs text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded-md">{food.calories} kcal</span>
-                                {(() => {
-                                  const s = scoreFood(food, fitnessGoal);
-                                  return (
-                                    <span
-                                      className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`}
-                                      title={s.reason}
-                                    >
-                                      {s.label}
-                                    </span>
-                                  );
-                                })()}
+                                <span
+                                  className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[score.grade]}`}
+                                  title={score.reason}
+                                >
+                                  {score.label}
+                                </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1536,16 +1515,12 @@ export default function App() {
                               <span className="text-slate-400 text-[9px] font-bold uppercase tracking-tighter">脂肪</span>
                             </div>
                           </div>
-                          {(() => {
-                            const s = scoreFood(food, fitnessGoal);
-                            return (
-                              <p className="text-[11px] text-slate-400 font-medium mt-2 px-1">
-                                {s.label} · {s.reason}
-                              </p>
-                            );
-                          })()}
+                          <p className="text-[11px] text-slate-400 font-medium mt-2 px-1">
+                            {score.label} · {score.reason}
+                          </p>
                         </motion.div>
-                      ))}
+                        );
+                      })}
                     </motion.div>
                   );
                 })
@@ -1848,341 +1823,41 @@ export default function App() {
                 </div>
 
                 {activeTab === 'ai' ? (
-                  <div className="space-y-6">
-                    <div className="relative group">
-                      {selectedImage ? (
-                        <div className="relative w-full aspect-video rounded-[2rem] overflow-hidden border-2 border-emerald-100 mb-4">
-                          <img src={selectedImage} alt="Selected food" className="w-full h-full object-cover" />
-                          <button 
-                            onClick={() => setSelectedImage(null)}
-                            className="absolute top-4 right-4 bg-rose-500 text-white p-2 rounded-full shadow-lg hover:bg-rose-600 transition-colors"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-4 mb-4">
-                          <label className="flex-1 flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-all group/upload">
-                            <ImageIcon size={32} className="text-slate-300 group-hover/upload:text-emerald-500 transition-colors" />
-                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">选择照片</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                          </label>
-                          <label className="flex-1 flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-all group/camera">
-                            <Camera size={32} className="text-slate-300 group-hover/camera:text-emerald-500 transition-colors" />
-                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">拍照识别</span>
-                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageChange} />
-                          </label>
-                        </div>
-                      )}
-                      
-                      <textarea
-                        value={aiQuery}
-                        onChange={(e) => setAiQuery(e.target.value)}
-                        placeholder={selectedImage ? "补充描述（可选）" : "例如：200克煎鸡胸肉和一碗糙米饭"}
-                        className="w-full h-32 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all resize-none text-base font-medium placeholder:text-slate-300"
-                      />
-                      <motion.button 
-                        disabled={isEstimating || (!aiQuery.trim() && !selectedImage)}
-                        onClick={handleAiEstimate}
-                        className="absolute bottom-6 right-6 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white p-4 rounded-full shadow-[0_8px_30px_rgba(16,185,129,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-95 touch-manipulation"
-                      >
-                        {isEstimating ? <Loader2 size={24} className="animate-spin" /> : <ChevronRight size={24} />}
-                      </motion.button>
-                    </div>
-
-                    {error && (
-                      <div className="p-4 bg-rose-50 text-rose-600 text-sm font-bold rounded-2xl flex items-center gap-3 border border-rose-100">
-                        <X size={18} />
-                        {error}
-                      </div>
-                    )}
-
-                    {isEstimating && (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="p-6 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-[2rem] flex flex-col items-center justify-center gap-4 text-emerald-600 font-black border border-emerald-100/50 relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm relative">
-                          <Loader2 size={24} className="animate-spin text-emerald-500" />
-                          <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 animate-ping" />
-                        </div>
-                        <span className="tracking-widest">AI 正在努力识别中...</span>
-                      </motion.div>
-                    )}
-
-                    {estimatedResult && !isEstimating && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-6 bg-emerald-50/50 rounded-[2rem] border-2 border-emerald-100 space-y-6"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-black text-emerald-900 text-xl tracking-tight">{estimatedResult.name || "未命名食物"}</h4>
-                            <p className="text-xs text-emerald-600 font-black uppercase tracking-widest mt-1">{estimatedResult.amount || "未知份量"}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-3xl font-black text-emerald-900 tracking-tighter">{estimatedResult.calories || 0}</span>
-                            <span className="text-xs font-black text-emerald-600 uppercase ml-1">kcal</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <MacroBadge label="蛋白质" value={estimatedResult.protein || 0} color="purple" />
-                          <MacroBadge label="碳水" value={estimatedResult.carbs || 0} color="blue" />
-                          <MacroBadge label="脂肪" value={estimatedResult.fat || 0} color="orange" />
-                        </div>
-                        {(() => {
-                          const s = scoreFood({
-                            calories: estimatedResult.calories || 0,
-                            protein: estimatedResult.protein || 0,
-                            carbs: estimatedResult.carbs || 0,
-                            fat: estimatedResult.fat || 0,
-                          }, fitnessGoal);
-                          return (
-                            <div className="flex items-center gap-2 px-1">
-                              <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${SCORE_BADGE_STYLES[s.grade]}`}>
-                                {s.label}
-                              </span>
-                              <span className="text-xs text-emerald-700/70 font-medium">{s.reason}</span>
-                            </div>
-                          );
-                        })()}
-                        <div className="grid grid-cols-2 gap-3">
-                          <motion.button 
-                            onClick={() => handleAddFood(estimatedResult)}
-                            className="flex-1 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 transition-all active:scale-95 touch-manipulation"
-                          >
-                            <Check size={20} />
-                            记录今日
-                          </motion.button>
-                          <button 
-                            onClick={async () => {
-                              const foodId = crypto.randomUUID();
-                              const newFood: LibraryFood = {
-                                id: foodId,
-                                name: estimatedResult.name || "未命名食物",
-                                caloriesPer100g: estimatedResult.calories || 0,
-                                proteinPer100g: estimatedResult.protein || 0,
-                                carbsPer100g: estimatedResult.carbs || 0,
-                                fatPer100g: estimatedResult.fat || 0,
-                                createdAt: Date.now()
-                              };
-                              
-                              setLibrary(prev => [newFood, ...prev]);
-                              
-                              if (user) {
-                                const foodRef = doc(db, 'users', user.uid, 'library', foodId);
-                                setDoc(foodRef, { ...newFood, ownerUid: user.uid }).catch(err => console.error("Library sync error:", err));
-                              }
-                              
-                              setToast({ message: `已保存 ${newFood.name} 到食物库`, type: 'success' });
-                              setIsAddModalOpen(false);
-                              setIsLibraryOpen(true);
-                            }}
-                            className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-slate-900/20 flex items-center justify-center gap-2 hover:bg-slate-800 transition-all hover:-translate-y-1"
-                          >
-                            <Plus size={20} />
-                            存入库中
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </div>
+                  <AiTab
+                    selectedImage={selectedImage}
+                    setSelectedImage={setSelectedImage}
+                    aiQuery={aiQuery}
+                    setAiQuery={setAiQuery}
+                    onImageChange={handleImageChange}
+                    onEstimate={handleAiEstimate}
+                    isEstimating={isEstimating}
+                    error={error}
+                    estimatedResult={estimatedResult}
+                    portionMult={portionMult}
+                    setPortionMult={setPortionMult}
+                    fitnessGoal={fitnessGoal}
+                    onAddFood={handleAddFood}
+                    onSaveToLibrary={handleSaveEstimateToLibrary}
+                  />
                 ) : activeTab === 'library' ? (
-                  <div className="space-y-6">
-                    <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                      {library.length > 0 ? (
-                        library.map((food) => (
-                          <div
-                            key={food.id}
-                            onClick={() => setSelectedLibraryFood(food)}
-                            className={cn(
-                              "w-full p-4 sm:p-5 rounded-2xl border-2 transition-all flex items-center justify-between group cursor-pointer",
-                              selectedLibraryFood?.id === food.id 
-                                ? "bg-emerald-50 border-emerald-500 shadow-lg shadow-emerald-500/10" 
-                                : "bg-slate-50 border-slate-100 hover:border-emerald-200"
-                            )}
-                          >
-                            <div className="text-left flex-1 pr-2">
-                              <h4 className="font-black text-slate-900 text-sm sm:text-base line-clamp-1">{food.name}</h4>
-                              <div className="flex items-center gap-2 mt-1">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">每 100g / {food.caloriesPer100g} kcal</p>
-                                {(() => {
-                                  const s = scoreLibraryFood(food, fitnessGoal);
-                                  return (
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`} title={s.reason}>
-                                      {s.label}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingLibraryFood(food);
-                                }}
-                                className="p-2 text-slate-300 hover:text-emerald-500 transition-colors active:scale-95"
-                              >
-                                <Pencil size={16} />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveLibraryFood(food.id);
-                                }}
-                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors active:scale-95"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                              {selectedLibraryFood?.id === food.id && (
-                                <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white ml-1">
-                                  <Check size={14} strokeWidth={4} />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="py-10 text-center space-y-4">
-                          <p className="text-slate-400 font-bold">收藏库还是空的</p>
-                          <button 
-                            onClick={() => { setIsAddModalOpen(false); setIsLibraryOpen(true); }}
-                            className="text-emerald-600 font-black text-sm hover:underline"
-                          >
-                            前往管理食物库
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {selectedLibraryFood && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6 pt-4 border-t border-slate-100"
-                      >
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">摄入重量 (克)</label>
-                          <input 
-                            type="number"
-                            value={libraryAmount}
-                            onChange={(e) => setLibraryAmount(e.target.value)}
-                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none font-black text-xl"
-                          />
-                        </div>
-                        <motion.button 
-                          onClick={handleAddFromLibrary}
-                          className="w-full bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-4 rounded-full font-black text-lg shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:scale-95 transition-transform touch-manipulation"
-                        >
-                          添加到记录
-                        </motion.button>
-                      </motion.div>
-                    )}
-                  </div>
+                  <LibraryTab
+                    library={library}
+                    fitnessGoal={fitnessGoal}
+                    selectedLibraryFood={selectedLibraryFood}
+                    setSelectedLibraryFood={setSelectedLibraryFood}
+                    onEditFood={setEditingLibraryFood}
+                    onRemoveFood={handleRemoveLibraryFood}
+                    libraryAmount={libraryAmount}
+                    setLibraryAmount={setLibraryAmount}
+                    onAddFromLibrary={handleAddFromLibrary}
+                    onGoToLibrary={() => { setIsAddModalOpen(false); setIsLibraryOpen(true); }}
+                  />
                 ) : (
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">食物名称</label>
-                      <input
-                        type="text"
-                        placeholder="例如：全麦吐司"
-                        value={manualFood.name}
-                        onChange={(e) => setManualFood({...manualFood, name: e.target.value})}
-                        className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">热量 (kcal)</label>
-                        <input
-                          type="number"
-                          value={manualFood.calories}
-                          onChange={(e) => setManualFood({...manualFood, calories: e.target.value})}
-                          className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">份量 (如 100g)</label>
-                        <input
-                          type="text"
-                          value={manualFood.amount}
-                          onChange={(e) => setManualFood({...manualFood, amount: e.target.value})}
-                          className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">蛋白质</label>
-                        <input
-                          type="number"
-                          placeholder="克"
-                          value={manualFood.protein}
-                          onChange={(e) => {
-                            const newProtein = e.target.value;
-                            setManualFood({
-                              ...manualFood, 
-                              protein: newProtein,
-                              calories: getAutoCalories(newProtein, manualFood.carbs, manualFood.fat).toString()
-                            });
-                          }}
-                          className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">碳水</label>
-                        <input
-                          type="number"
-                          placeholder="克"
-                          value={manualFood.carbs}
-                          onChange={(e) => {
-                            const newCarbs = e.target.value;
-                            setManualFood({
-                              ...manualFood, 
-                              carbs: newCarbs,
-                              calories: getAutoCalories(manualFood.protein, newCarbs, manualFood.fat).toString()
-                            });
-                          }}
-                          className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">脂肪</label>
-                        <input
-                          type="number"
-                          placeholder="克"
-                          value={manualFood.fat}
-                          onChange={(e) => {
-                            const newFat = e.target.value;
-                            setManualFood({
-                              ...manualFood, 
-                              fat: newFat,
-                              calories: getAutoCalories(manualFood.protein, manualFood.carbs, newFat).toString()
-                            });
-                          }}
-                          className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-base font-bold"
-                        />
-                      </div>
-                    </div>
-                    <motion.button 
-                      disabled={!manualFood.name || !manualFood.calories}
-                      onClick={() => handleAddFood({
-                        name: manualFood.name,
-                        calories: Number(manualFood.calories),
-                        protein: Number(manualFood.protein) || 0,
-                        carbs: Number(manualFood.carbs) || 0,
-                        fat: Number(manualFood.fat) || 0,
-                        amount: manualFood.amount || '1 份'
-                      })}
-                      className="w-full bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-5 rounded-full font-black text-lg shadow-[0_8px_30px_rgba(16,185,129,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-95 touch-manipulation"
-                    >
-                      添加到记录
-                    </motion.button>
-                  </div>
+                  <ManualTab
+                    manualFood={manualFood}
+                    setManualFood={setManualFood}
+                    onAddFood={handleAddFood}
+                  />
                 )}
               </div>
             </motion.div>
@@ -2191,870 +1866,78 @@ export default function App() {
       </AnimatePresence>
 
       {/* Logout Confirmation Modal */}
-      <AnimatePresence>
-        {isLogoutModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsLogoutModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="relative w-full max-w-sm bg-white rounded-[2rem] p-6 shadow-2xl border border-slate-100 text-center"
-            >
-              <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <LogOut size={32} />
-              </div>
-              <h3 className="text-xl font-black text-slate-900 mb-2">确定要退出登录吗？</h3>
-              <p className="text-sm text-slate-500 font-bold mb-8">退出后将无法同步云端数据，但本地数据仍会保留。</p>
-              
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setIsLogoutModalOpen(false)}
-                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black transition-colors"
-                >
-                  取消
-                </button>
-                <button 
-                  onClick={() => {
-                    handleLogout();
-                    setIsLogoutModalOpen(false);
-                  }}
-                  className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-black transition-colors shadow-lg shadow-rose-500/20"
-                >
-                  确认退出
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleLogout}
+      />
 
       {/* Weight Modal */}
-      <AnimatePresence>
-        {isWeightModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-              onClick={() => setIsWeightModalOpen(false)}
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-6 shadow-2xl overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-                  <Scale size={24} className="text-violet-500" />
-                  记录体重
-                </h3>
-                <button 
-                  onClick={() => setIsWeightModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={weightInput}
-                    onChange={(e) => setWeightInput(e.target.value)}
-                    placeholder="例如: 65.5"
-                    className="w-full p-4 pr-12 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-violet-500 font-black text-2xl text-slate-900 placeholder:text-slate-300 transition-colors"
-                    autoFocus
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">kg</span>
-                </div>
-                
-                <motion.button
-                  onClick={() => {
-                    const w = Number(weightInput);
-                    if (w > 0) {
-                      handleUpdateWeight(w);
-                      setIsWeightModalOpen(false);
-                    }
-                  }}
-                  disabled={!weightInput || Number(weightInput) <= 0}
-                  className="w-full py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-full font-black text-lg shadow-[0_8px_30px_rgba(139,92,246,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-95 touch-manipulation"
-                >
-                  保存记录
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <WeightModal
+        isOpen={isWeightModalOpen}
+        onClose={() => setIsWeightModalOpen(false)}
+        weightInput={weightInput}
+        setWeightInput={setWeightInput}
+        onSave={handleUpdateWeight}
+      />
 
       {/* AI Chat Modal */}
-      <AnimatePresence>
-        {isChatOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsChatOpen(false)}
-              className="absolute inset-0 bg-slate-900/60"
-            />
-            <motion.div
-              initial={{ y: '100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="relative w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-[80dvh]"
-            >
-              {/* header */}
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-emerald-50 text-emerald-500 rounded-lg">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900 leading-tight">AI 营养教练</h2>
-                    <p className="text-[11px] text-slate-400 font-bold">只回答饮食营养相关问题</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsChatOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-                  <X size={22} />
-                </button>
-              </div>
-
-              {/* messages */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
-                {chatMessages.length === 0 && (
-                  <div className="text-center text-slate-400 mt-8 px-6">
-                    <Sparkles size={32} className="mx-auto mb-3 text-emerald-200" />
-                    <p className="text-sm font-medium">问我任何饮食、营养、热量相关的问题吧。</p>
-                    <p className="text-xs mt-2 text-slate-300">比如："我今天蛋白够吗？""晚上还能吃点什么？"</p>
-                  </div>
-                )}
-                {chatMessages.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                      {m.content}
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-100 text-slate-400 rounded-2xl px-4 py-2.5 text-sm">正在思考…</div>
-                  </div>
-                )}
-              </div>
-
-              {/* input */}
-              <div className="p-4 border-t border-slate-100 shrink-0 flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
-                  placeholder="输入你的问题…"
-                  className="flex-1 px-4 py-3 bg-slate-50 rounded-2xl outline-none font-medium text-sm focus:bg-slate-100 transition-colors"
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={chatLoading || !chatInput.trim()}
-                  className="px-5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl transition-colors disabled:opacity-40 text-sm"
-                >
-                  发送
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        messages={chatMessages}
+        input={chatInput}
+        setInput={setChatInput}
+        loading={chatLoading}
+        onSend={handleSendChat}
+      />
 
       {/* Settings Modal */}
-      <AnimatePresence>
-        {isSettingsOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSettingsOpen(false)}
-              className="absolute inset-0 bg-slate-900/60"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="relative w-full max-w-md bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[85dvh]"
-            >
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 shrink-0">
-                <h2 className="text-3xl font-black tracking-tighter text-slate-900">目标设定</h2>
-                <button onClick={() => setIsSettingsOpen(false)} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm border border-transparent hover:border-slate-100">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 block">我的目标（影响 AI 教练建议）</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'gain', label: '增肌' },
-                      { key: 'lose', label: '减脂' },
-                      { key: 'maintain', label: '维持' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.key}
-                        onClick={() => setFitnessGoal(opt.key)}
-                        className={`py-3 rounded-2xl font-black transition-colors ${fitnessGoal === opt.key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 flex justify-between items-center">
-                    <span>每日热量目标 (kcal)</span>
-                    <span className="text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full normal-case tracking-normal">自动计算</span>
-                  </label>
-                  <input 
-                    type="number"
-                    value={goals.calories}
-                    readOnly
-                    className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-black text-2xl text-emerald-600 opacity-80 cursor-not-allowed"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">蛋白质 (g)</label>
-                    <input 
-                      type="number"
-                      value={goals.protein}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        handleUpdateGoals({
-                          ...goals, 
-                          protein: val,
-                          calories: Math.round(val * 4 + goals.carbs * 4 + goals.fat * 9)
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-black text-center"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">碳水 (g)</label>
-                    <input 
-                      type="number"
-                      value={goals.carbs}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        handleUpdateGoals({
-                          ...goals, 
-                          carbs: val,
-                          calories: Math.round(goals.protein * 4 + val * 4 + goals.fat * 9)
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none font-black text-center"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">脂肪 (g)</label>
-                    <input 
-                      type="number"
-                      value={goals.fat}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        handleUpdateGoals({
-                          ...goals, 
-                          fat: val,
-                          calories: Math.round(goals.protein * 4 + goals.carbs * 4 + val * 9)
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none font-black text-center"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-6 border-t border-slate-100">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 flex justify-between items-center">
-                    <span>AI 识别引擎</span>
-                  </label>
-                  <p className="text-xs text-slate-400 font-bold mb-2">国内网络无法访问 Gemini，请切换到 DeepSeek。</p>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      onClick={() => {
-                        setAiProvider('gemini');
-                        if (typeof window !== 'undefined') localStorage.setItem('ai_provider', 'gemini');
-                      }}
-                      className={`flex-1 py-3 rounded-xl font-black transition-colors ${aiProvider === 'gemini' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                    >
-                      Gemini
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAiProvider('deepseek');
-                        if (typeof window !== 'undefined') localStorage.setItem('ai_provider', 'deepseek');
-                      }}
-                      className={`flex-1 py-3 rounded-xl font-black transition-colors ${aiProvider === 'deepseek' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                    >
-                      DeepSeek（国内）
-                    </button>
-                  </div>
-
-                  {aiProvider === 'gemini' ? (
-                    <>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 block">自定义 Gemini API Key</label>
-                      <p className="text-xs text-slate-400 font-bold mb-2">在浏览器或手机中独立打开此应用时，请配置您的 API Key。</p>
-                      <input
-                        type="password"
-                        placeholder="AIzaSy..."
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:border-emerald-500"
-                      />
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => {
-                            if (typeof window !== 'undefined') {
-                              localStorage.setItem('user_gemini_api_key', apiKey);
-                            }
-                            setToast({ message: "API Key 已保存", type: "success" });
-                          }}
-                          className="flex-1 bg-slate-200 text-slate-700 font-black py-3 rounded-xl hover:bg-slate-300 transition-colors"
-                        >
-                          保存 API Key
-                        </button>
-                        <button
-                          onClick={() => {
-                            setApiKey('');
-                            if (typeof window !== 'undefined') {
-                              localStorage.removeItem('user_gemini_api_key');
-                            }
-                            setToast({ message: "API Key 已清除", type: "info" });
-                          }}
-                          className="flex-1 bg-rose-50 text-rose-600 font-black py-3 rounded-xl hover:bg-rose-100 transition-colors"
-                        >
-                          清除记录
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 block">DeepSeek API Key</label>
-                      <p className="text-xs text-slate-400 font-bold mb-2">在 platform.deepseek.com 申请，格式以 sk- 开头。国内可直连，支持文字与拍照识别。</p>
-                      <input
-                        type="password"
-                        placeholder="sk-..."
-                        value={deepseekKey}
-                        onChange={(e) => setDeepseekKey(e.target.value)}
-                        className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold placeholder:text-slate-300 focus:border-indigo-500"
-                      />
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => {
-                            if (typeof window !== 'undefined') {
-                              localStorage.setItem('user_deepseek_api_key', deepseekKey);
-                            }
-                            setToast({ message: "DeepSeek Key 已保存", type: "success" });
-                          }}
-                          className="flex-1 bg-slate-200 text-slate-700 font-black py-3 rounded-xl hover:bg-slate-300 transition-colors"
-                        >
-                          保存 API Key
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeepseekKey('');
-                            if (typeof window !== 'undefined') {
-                              localStorage.removeItem('user_deepseek_api_key');
-                            }
-                            setToast({ message: "DeepSeek Key 已清除", type: "info" });
-                          }}
-                          className="flex-1 bg-rose-50 text-rose-600 font-black py-3 rounded-xl hover:bg-rose-100 transition-colors"
-                        >
-                          清除记录
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <motion.button 
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="w-full bg-gradient-to-r from-slate-800 to-slate-900 text-white py-5 rounded-full font-black text-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] mt-8 active:scale-95 transition-transform touch-manipulation"
-                >
-                  保存修改
-                </motion.button>
-                <p className="text-center text-[11px] text-slate-300 font-bold mt-4">健食 GYMEAT · v1.6</p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        goals={goals}
+        onUpdateGoals={handleUpdateGoals}
+        fitnessGoal={fitnessGoal}
+        setFitnessGoal={setFitnessGoal}
+        aiProvider={aiProvider}
+        setAiProvider={setAiProvider}
+        apiKey={apiKey}
+        setApiKey={setApiKey}
+        deepseekKey={deepseekKey}
+        setDeepseekKey={setDeepseekKey}
+        setToast={setToast}
+      />
 
       {/* Food Library Modal */}
-      <AnimatePresence>
-        {isLibraryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsLibraryOpen(false)}
-              className="absolute inset-0 bg-slate-900/60"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 30 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 30 }}
-              transition={{ 
-                type: "spring", 
-                damping: 30, 
-                stiffness: 300,
-                mass: 0.8
-              }}
-              className="relative w-full max-w-2xl bg-white rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-slate-100"
-            >
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                <h2 className="text-3xl font-black tracking-tighter text-slate-900">专属食物库</h2>
-                <button onClick={() => setIsLibraryOpen(false)} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                {/* Add to Library Form */}
-                <section className="space-y-6">
-                  <div className="flex flex-col gap-4">
-                    <h3 className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-2 shrink-0">
-                      <Plus size={20} className="text-emerald-500" />
-                      新增常用食物 <span className="text-slate-400 text-xs font-bold">(每 100g)</span>
-                    </h3>
-                    <div className="flex gap-3 w-full">
-                      <label className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 text-emerald-600 rounded-2xl cursor-pointer hover:bg-emerald-100 transition-all text-sm font-black whitespace-nowrap">
-                        <ImageIcon size={18} />
-                        相册识别
-                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setIsEstimating(true);
-                            setError(null);
-                            try {
-                              const compressedBase64 = await compressImage(file);
-                              const result = await estimateLibraryNutrition("请识别营养表并返回每100g的数值", compressedBase64);
-                              
-                              if (!result.isFood) {
-                                setError(result.reason || "未能识别出食物或营养表，请换张图片");
-                                setIsEstimating(false);
-                                return;
-                              }
-
-                              setLibraryEntry({
-                                name: result.name || "未命名食物",
-                                calories: result.calories ? Math.round(result.calories).toString() : "0",
-                                protein: result.protein ? result.protein.toFixed(1) : "0",
-                                carbs: result.carbs ? result.carbs.toFixed(1) : "0",
-                                fat: result.fat ? result.fat.toFixed(1) : "0",
-                                amount: '100'
-                              });
-                            } catch (err: any) {
-                              console.error("识别失败", err);
-                              const errorMessage = parseAiError(err);
-                              setError(errorMessage);
-                            } finally {
-                              setIsEstimating(false);
-                            }
-                          }
-                        }} />
-                      </label>
-                      <label className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 text-emerald-600 rounded-2xl cursor-pointer hover:bg-emerald-100 transition-all text-sm font-black whitespace-nowrap">
-                        <Camera size={18} />
-                        拍照识别
-                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setIsEstimating(true);
-                            setError(null);
-                            try {
-                              const compressedBase64 = await compressImage(file);
-                              const result = await estimateLibraryNutrition("请识别营养表并返回每100g的数值", compressedBase64);
-                              
-                              if (!result.isFood) {
-                                setError(result.reason || "未能识别出食物或营养表，请换张图片");
-                                setIsEstimating(false);
-                                return;
-                              }
-
-                              setLibraryEntry({
-                                name: result.name || "未命名食物",
-                                calories: result.calories ? Math.round(result.calories).toString() : "0",
-                                protein: result.protein ? result.protein.toFixed(1) : "0",
-                                carbs: result.carbs ? result.carbs.toFixed(1) : "0",
-                                fat: result.fat ? result.fat.toFixed(1) : "0",
-                                amount: '100'
-                              });
-                            } catch (err: any) {
-                              console.error("识别失败", err);
-                              const errorMessage = parseAiError(err);
-                              setError(errorMessage);
-                            } finally {
-                              setIsEstimating(false);
-                            }
-                          }
-                        }} />
-                      </label>
-                    </div>
-                  </div>
-                  
-                  {error && (
-                    <div className="p-4 bg-rose-50 text-rose-600 text-sm font-bold rounded-2xl flex items-center gap-3 border border-rose-100">
-                      <X size={18} />
-                      {error}
-                    </div>
-                  )}
-
-                  {isEstimating && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="p-6 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-[2rem] flex flex-col items-center justify-center gap-4 text-emerald-600 font-black border border-emerald-100/50 relative overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm relative">
-                        <Loader2 size={24} className="animate-spin text-emerald-500" />
-                        <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 animate-ping" />
-                      </div>
-                      <span className="tracking-widest">AI 正在努力识别中...</span>
-                    </motion.div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <input
-                      type="text"
-                      placeholder="食物名称 (如：乳清蛋白粉)"
-                      value={libraryEntry.name}
-                      onChange={(e) => setLibraryEntry({...libraryEntry, name: e.target.value})}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold sm:col-span-1"
-                    />
-                    <input
-                      type="number"
-                      placeholder="热量 (kcal)"
-                      value={libraryEntry.calories}
-                      onChange={(e) => setLibraryEntry({...libraryEntry, calories: e.target.value})}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                    />
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="份量"
-                        value={libraryEntry.amount}
-                        onChange={(e) => setLibraryEntry({...libraryEntry, amount: e.target.value})}
-                        className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold pr-10"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">g</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <input
-                      type="number"
-                      placeholder="蛋白(g)"
-                      value={libraryEntry.protein}
-                      onChange={(e) => {
-                        const newProtein = e.target.value;
-                        setLibraryEntry({
-                          ...libraryEntry, 
-                          protein: newProtein,
-                          calories: getAutoCalories(newProtein, libraryEntry.carbs, libraryEntry.fat).toString()
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold text-sm sm:text-base"
-                    />
-                    <input
-                      type="number"
-                      placeholder="碳水(g)"
-                      value={libraryEntry.carbs}
-                      onChange={(e) => {
-                        const newCarbs = e.target.value;
-                        setLibraryEntry({
-                          ...libraryEntry, 
-                          carbs: newCarbs,
-                          calories: getAutoCalories(libraryEntry.protein, newCarbs, libraryEntry.fat).toString()
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold text-sm sm:text-base"
-                    />
-                    <input
-                      type="number"
-                      placeholder="脂肪(g)"
-                      value={libraryEntry.fat}
-                      onChange={(e) => {
-                        const newFat = e.target.value;
-                        setLibraryEntry({
-                          ...libraryEntry, 
-                          fat: newFat,
-                          calories: getAutoCalories(libraryEntry.protein, libraryEntry.carbs, newFat).toString()
-                        });
-                      }}
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                    />
-                  </div>
-                  <motion.button 
-                    onClick={handleAddToLibrary}
-                    disabled={!libraryEntry.name || !libraryEntry.calories}
-                    className="w-full bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-4 rounded-full font-black text-lg shadow-[0_8px_30px_rgba(16,185,129,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-95 touch-manipulation"
-                  >
-                    存入库中
-                  </motion.button>
-                </section>
-
-                {/* Library List */}
-                <section className="space-y-6">
-                  <h3 className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
-                    <History size={20} className="text-emerald-500" />
-                    已保存的食物
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {library.length > 0 ? (
-                      library.map((food) => (
-                        <div key={food.id} className="p-4 sm:p-5 bg-white/60 backdrop-blur-md rounded-[2rem] border border-white/50 flex items-center justify-between group transition-all shadow-[0_4px_15px_rgb(0,0,0,0.02)]">
-                          <div className="flex-1 pr-2">
-                            <h4 className="font-black text-slate-900 text-sm sm:text-base line-clamp-1">{food.name}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                                {food.caloriesPer100g} kcal / 100g
-                              </p>
-                              {(() => {
-                                const s = scoreLibraryFood(food, fitnessGoal);
-                                return (
-                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${SCORE_BADGE_STYLES[s.grade]}`} title={s.reason}>
-                                    {s.label}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button 
-                              onClick={() => setEditingLibraryFood(food)}
-                              className="p-2 text-slate-300 hover:text-emerald-500 transition-colors active:scale-95"
-                            >
-                              <Pencil size={18} />
-                            </button>
-                            <button 
-                              onClick={() => handleRemoveLibraryFood(food.id)}
-                              className="p-2 text-slate-300 hover:text-rose-500 transition-colors active:scale-95"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-full py-12 text-center space-y-4 bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-100">
-                        <div className="w-16 h-16 bg-white rounded-full mx-auto flex items-center justify-center text-slate-200 shadow-sm">
-                          <Leaf size={24} />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-slate-900 font-black text-base tracking-tight">食物库空空如也</p>
-                          <p className="text-xs text-slate-400 font-bold">将常用食物存入库中，方便快速添加</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <FoodLibraryModal
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        libraryEntry={libraryEntry}
+        setLibraryEntry={setLibraryEntry}
+        error={error}
+        isEstimating={isEstimating}
+        onImageSelect={handleLibraryImageSelect}
+        onAddToLibrary={handleAddToLibrary}
+        library={library}
+        fitnessGoal={fitnessGoal}
+        onEditFood={setEditingLibraryFood}
+        onRemoveFood={handleRemoveLibraryFood}
+      />
 
       {/* Edit Food Modal */}
-      <AnimatePresence>
-        {editingFood && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingFood(null)}
-              className="absolute inset-0 bg-slate-900/60"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="relative w-full max-w-md bg-white rounded-[3rem] p-8 shadow-2xl border border-slate-100 max-h-[85dvh] overflow-y-auto custom-scrollbar"
-            >
-              <h2 className="text-2xl font-black tracking-tighter text-slate-900 mb-6">修改摄入量</h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">食物名称</label>
-                  <p className="text-lg font-black text-slate-900">{editingFood.name}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">修改克数 (g)</label>
-                  <input
-                    type="number"
-                    value={editingFood.amountValue || ''}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      // Fallback for baseNutrition if it's missing for some reason
-                      const base = editingFood.baseNutrition || {
-                        calories: editingFood.calories,
-                        protein: editingFood.protein,
-                        carbs: editingFood.carbs,
-                        fat: editingFood.fat,
-                        unit: editingFood.amount.toLowerCase().includes('g') ? 'g' : 'unit'
-                      };
-                      
-                      const currentAmount = editingFood.amountValue || 100;
-                      const ratio = base.unit === 'g' ? (val / 100) : (val / currentAmount);
-                      
-                      setEditingFood({
-                        ...editingFood,
-                        amountValue: val,
-                        amount: `${val}${base.unit === 'g' ? 'g' : ''}`,
-                        calories: Math.round(base.calories * ratio),
-                        protein: Number((base.protein * ratio).toFixed(1)),
-                        carbs: Number((base.carbs * ratio).toFixed(1)),
-                        fat: Number((base.fat * ratio).toFixed(1)),
-                        baseNutrition: base
-                      });
-                    }}
-                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-black text-xl"
-                  />
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="p-3 bg-slate-50 rounded-2xl">
-                    <p className="text-[10px] font-bold text-slate-400">热量</p>
-                    <p className="font-black text-emerald-600">{editingFood.calories}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-2xl">
-                    <p className="text-[10px] font-bold text-slate-400">蛋白</p>
-                    <p className="font-black text-blue-500">{editingFood.protein}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-2xl">
-                    <p className="text-[10px] font-bold text-slate-400">碳水</p>
-                    <p className="font-black text-violet-500">{editingFood.carbs}</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-2xl">
-                    <p className="text-[10px] font-bold text-slate-400">脂肪</p>
-                    <p className="font-black text-amber-500">{editingFood.fat}</p>
-                  </div>
-                </div>
-                <motion.button
-                  onClick={() => handleUpdateFood(editingFood)}
-                  className="w-full py-4 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-full font-black shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:scale-95 transition-transform touch-manipulation"
-                >
-                  保存修改
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <EditFoodModal
+        editingFood={editingFood}
+        setEditingFood={setEditingFood}
+        onSave={handleUpdateFood}
+      />
 
       {/* Edit Library Food Modal */}
-      <AnimatePresence>
-        {editingLibraryFood && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingLibraryFood(null)}
-              className="absolute inset-0 bg-slate-900/60"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative w-full max-w-md bg-white rounded-[3rem] p-8 shadow-2xl border border-slate-100"
-            >
-              <h2 className="text-2xl font-black tracking-tighter text-slate-900 mb-6">修改食物库数据</h2>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="食物名称"
-                  value={editingLibraryFood.name}
-                  onChange={(e) => setEditingLibraryFood({...editingLibraryFood, name: e.target.value})}
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                />
-                <input
-                  type="number"
-                  placeholder="热量 (每100g)"
-                  value={editingLibraryFood.caloriesPer100g}
-                  onChange={(e) => setEditingLibraryFood({...editingLibraryFood, caloriesPer100g: Number(e.target.value)})}
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                />
-                <div className="grid grid-cols-3 gap-4">
-                  <input
-                    type="number"
-                    placeholder="蛋白"
-                    value={editingLibraryFood.proteinPer100g}
-                    onChange={(e) => {
-                      const newProtein = Number(e.target.value);
-                      setEditingLibraryFood({
-                        ...editingLibraryFood, 
-                        proteinPer100g: newProtein,
-                        caloriesPer100g: getAutoCalories(newProtein, editingLibraryFood.carbsPer100g, editingLibraryFood.fatPer100g)
-                      });
-                    }}
-                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                  />
-                  <input
-                    type="number"
-                    placeholder="碳水"
-                    value={editingLibraryFood.carbsPer100g}
-                    onChange={(e) => {
-                      const newCarbs = Number(e.target.value);
-                      setEditingLibraryFood({
-                        ...editingLibraryFood, 
-                        carbsPer100g: newCarbs,
-                        caloriesPer100g: getAutoCalories(editingLibraryFood.proteinPer100g, newCarbs, editingLibraryFood.fatPer100g)
-                      });
-                    }}
-                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                  />
-                  <input
-                    type="number"
-                    placeholder="脂肪"
-                    value={editingLibraryFood.fatPer100g}
-                    onChange={(e) => {
-                      const newFat = Number(e.target.value);
-                      setEditingLibraryFood({
-                        ...editingLibraryFood, 
-                        fatPer100g: newFat,
-                        caloriesPer100g: getAutoCalories(editingLibraryFood.proteinPer100g, editingLibraryFood.carbsPer100g, newFat)
-                      });
-                    }}
-                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-bold"
-                  />
-                </div>
-                <motion.button
-                  onClick={() => handleUpdateLibraryFood(editingLibraryFood)}
-                  className="w-full py-4 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-full font-black shadow-[0_8px_30px_rgba(16,185,129,0.3)] mt-4 active:scale-95 transition-transform touch-manipulation"
-                >
-                  保存修改
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <EditLibraryFoodModal
+        editingLibraryFood={editingLibraryFood}
+        setEditingLibraryFood={setEditingLibraryFood}
+        onSave={handleUpdateLibraryFood}
+      />
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -3083,72 +1966,4 @@ export default function App() {
   );
 }
 
-function MacroStat({ label, current, target, color, icon }: { label: string, current: number, target: number, color: string, icon: ReactNode }) {
-  const percentage = Math.min((current / target) * 100, 100);
-  const diff = current - target;
-  
-  return (
-    <div className="flex items-center justify-between bg-white/60 backdrop-blur-md p-3 sm:p-4 rounded-[1.5rem] border border-white/50 shadow-[0_4px_15px_rgb(0,0,0,0.02)] gap-4">
-      <div className="flex items-center gap-2 w-20 shrink-0">
-        <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}20`, color }}>
-          {icon}
-        </div>
-        <span className="text-xs font-black text-slate-600 whitespace-nowrap">{label}</span>
-      </div>
 
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <motion.div 
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          className="h-full rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      </div>
-
-      <div className="flex flex-col items-start shrink-0 w-20 sm:w-24">
-        <div className="flex items-baseline gap-0.5">
-          <span className="text-sm font-black text-slate-900 tabular-nums"><AnimatedNumber value={current} /></span>
-          <span className="text-[10px] text-slate-400 font-bold tabular-nums">/{target}g</span>
-        </div>
-        <span className={cn("text-[9px] font-bold tracking-wider", diff > 0 ? "text-rose-400" : "text-slate-400")}>
-          {diff > 0 ? `超 ${Math.round(diff)}g` : `差 ${Math.round(-diff)}g`}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function AnimatedNumber({ value }: { value: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  
-  useEffect(() => {
-    if (!ref.current) return;
-    const node = ref.current;
-    
-    const controls = animate(Number(node.textContent) || 0, value, {
-      duration: 0.8,
-      ease: "easeOut",
-      onUpdate: (v) => {
-        node.textContent = Math.round(v).toString();
-      }
-    });
-    
-    return controls.stop;
-  }, [value]);
-  
-  return <span ref={ref}>{Math.round(value)}</span>;
-}
-
-function MacroBadge({ label, value, color }: { label: string, value: number, color: 'purple' | 'blue' | 'orange' }) {
-  const colors = {
-    purple: 'bg-purple-50 text-purple-600 border-purple-100',
-    blue: 'bg-blue-50 text-blue-600 border-blue-100',
-    orange: 'bg-orange-50 text-orange-600 border-orange-100',
-  };
-  return (
-    <div className={cn("p-3 rounded-2xl border-2 text-center transition-all hover:scale-105", colors[color])}>
-      <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-1">{label}</div>
-      <div className="text-lg font-black tracking-tighter">{value}g</div>
-    </div>
-  );
-}

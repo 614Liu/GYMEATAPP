@@ -12,14 +12,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      window.addEventListener('error', function(event) {
-        document.body.innerHTML = '<div style="padding: 20px; color: red; font-family: sans-serif;"><h2>Global Error</h2><pre>' + event.error?.stack + '</pre></div>';
-      });
-      window.addEventListener('unhandledrejection', function(event) {
-        document.body.innerHTML = '<div style="padding: 20px; color: red; font-family: sans-serif;"><h2>Unhandled Promise Rejection</h2><pre>' + event.reason?.stack + '</pre></div>';
-      });
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
