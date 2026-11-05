@@ -241,7 +241,7 @@ app.use("/api/", (req, res, next) => {
 
 // Health check — visit this URL to confirm which version is live.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "v1.9-refactor-hardening" });
+  res.json({ status: "ok", version: "v1.11-data-sync" });
 });
 
 // ===============================================================

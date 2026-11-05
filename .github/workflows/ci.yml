@@ -1,0 +1,41 @@
+# 每次推送、每个 PR 自动跑：类型检查 → 单元测试 → 安全规则测试 → 构建（海外版 + 国内版）
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 类型检查
+        run: npm run lint
+
+      - name: 单元测试
+        run: npm test
+
+      # Firestore 模拟器需要 Java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: 安全规则测试（本地模拟器，不连真实项目）
+        run: npm run test:rules
+
+      - name: 构建（网页 + 服务器）
+        run: npm run build
+
+      - name: 构建国内版
+        run: npx cross-env VITE_APP_REGION=cn vite build --outDir dist-cn

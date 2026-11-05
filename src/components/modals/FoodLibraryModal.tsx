@@ -1,9 +1,13 @@
+import { useState, type ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Camera, Image as ImageIcon, Loader2, History, Pencil, Trash2, Leaf } from 'lucide-react';
 import type { LibraryFood } from '../../types';
 import { SCORE_BADGE_STYLES } from '../../constants';
 import { scoreLibraryFood } from '../../lib/foodScore';
-import { getAutoCalories } from '../../lib/nutrition';
+import { getAutoCalories, newId } from '../../lib/nutrition';
+import { compressImage } from '../../lib/image';
+import { estimateLibraryNutrition, parseAiError } from '../../lib/gemini';
+import type { ToastType } from '../../hooks/useToast';
 
 /** 新增常用食物表单的草稿状态（全部按字符串存，提交时再转数字） */
 export interface LibraryEntryDraft {
@@ -15,35 +19,96 @@ export interface LibraryEntryDraft {
   amount: string;
 }
 
+const EMPTY_ENTRY: LibraryEntryDraft = { name: '', calories: '', protein: '', carbs: '', fat: '', amount: '100' };
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** 表单里填的是「amount 克」的营养，换算成每 100g 存库；数据不合理时返回 null */
+function draftToLibraryFood(d: LibraryEntryDraft): LibraryFood | null {
+  const name = d.name.trim();
+  const calories = Number(d.calories);
+  const amount = Number(d.amount) || 100;
+  if (!name || !Number.isFinite(calories) || calories < 0 || amount <= 0) return null;
+  const ratio = 100 / amount;
+  return {
+    id: newId(),
+    name,
+    caloriesPer100g: Math.round(calories * ratio),
+    proteinPer100g: round1((Number(d.protein) || 0) * ratio),
+    carbsPer100g: round1((Number(d.carbs) || 0) * ratio),
+    fatPer100g: round1((Number(d.fat) || 0) * ratio),
+    createdAt: Date.now(),
+  };
+}
+
 interface FoodLibraryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  libraryEntry: LibraryEntryDraft;
-  setLibraryEntry: (entry: LibraryEntryDraft) => void;
-  error: string | null;
-  isEstimating: boolean;
-  onImageSelect: (file: File) => void;
-  onAddToLibrary: () => void;
   library: LibraryFood[];
   fitnessGoal: string;
+  onAddToLibrary: (food: LibraryFood) => void;
   onEditFood: (food: LibraryFood) => void;
   onRemoveFood: (id: string) => void;
+  notify: (message: string, type?: ToastType) => void;
 }
 
 export function FoodLibraryModal({
   isOpen,
   onClose,
-  libraryEntry,
-  setLibraryEntry,
-  error,
-  isEstimating,
-  onImageSelect,
-  onAddToLibrary,
   library,
   fitnessGoal,
+  onAddToLibrary,
   onEditFood,
   onRemoveFood,
+  notify,
 }: FoodLibraryModalProps) {
+  // 识别状态只属于这个弹窗；以前和添加食物弹窗共用一个 error，两边会互相串
+  const [libraryEntry, setLibraryEntry] = useState<LibraryEntryDraft>(EMPTY_ENTRY);
+  const [error, setError] = useState<string | null>(null);
+  const [isEstimating, setIsEstimating] = useState(false);
+
+  /** 相册 / 拍照识别营养表，填入每 100g 的草稿 */
+  const handleImage = async (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = ''; // 允许再次选同一张图
+    if (!file) return;
+    setIsEstimating(true);
+    setError(null);
+    try {
+      const image = await compressImage(file);
+      const result = await estimateLibraryNutrition('请识别营养表并返回每100g的数值', image);
+      if (!result.isFood) {
+        setError(result.reason || '未能识别出食物或营养表，请换张图片');
+        return;
+      }
+      setLibraryEntry({
+        name: result.name || '未命名食物',
+        calories: result.calories ? Math.round(result.calories).toString() : '0',
+        protein: result.protein ? result.protein.toFixed(1) : '0',
+        carbs: result.carbs ? result.carbs.toFixed(1) : '0',
+        fat: result.fat ? result.fat.toFixed(1) : '0',
+        amount: '100',
+      });
+    } catch (err) {
+      console.error('识别失败', err);
+      setError(parseAiError(err));
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
+  const handleSave = () => {
+    const food = draftToLibraryFood(libraryEntry);
+    if (!food) {
+      notify('请填写名称和热量，份量需大于 0', 'error');
+      return;
+    }
+    onAddToLibrary(food);
+    setLibraryEntry(EMPTY_ENTRY);
+    notify(`已保存 ${food.name} 到食物库`, 'success');
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -69,7 +134,7 @@ export function FoodLibraryModal({
           >
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
               <h2 className="text-3xl font-black tracking-tighter text-slate-900">专属食物库</h2>
-              <button onClick={onClose} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm">
+              <button onClick={onClose} aria-label="关闭" className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm">
                 <X size={24} />
               </button>
             </div>
@@ -86,18 +151,12 @@ export function FoodLibraryModal({
                     <label className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 text-emerald-600 rounded-2xl cursor-pointer hover:bg-emerald-100 transition-all text-sm font-black whitespace-nowrap">
                       <ImageIcon size={18} />
                       相册识别
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) onImageSelect(file);
-                      }} />
+                      <input type="file" accept="image/*" className="hidden" disabled={isEstimating} onChange={handleImage} />
                     </label>
                     <label className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 text-emerald-600 rounded-2xl cursor-pointer hover:bg-emerald-100 transition-all text-sm font-black whitespace-nowrap">
                       <Camera size={18} />
                       拍照识别
-                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) onImageSelect(file);
-                      }} />
+                      <input type="file" accept="image/*" capture="environment" className="hidden" disabled={isEstimating} onChange={handleImage} />
                     </label>
                   </div>
                 </div>
@@ -195,7 +254,7 @@ export function FoodLibraryModal({
                   />
                 </div>
                 <motion.button
-                  onClick={onAddToLibrary}
+                  onClick={handleSave}
                   disabled={!libraryEntry.name || !libraryEntry.calories}
                   className="w-full bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-4 rounded-full font-black text-lg shadow-[0_8px_30px_rgba(16,185,129,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-95 touch-manipulation"
                 >

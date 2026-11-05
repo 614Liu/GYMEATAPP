@@ -37,6 +37,14 @@ export interface FoodItem {
   mealType?: MealType;
 }
 
+/** 新增一条记录时由界面提供的部分，其余字段（id、时间、餐次、换算基准）由 createFoodItem 补齐 */
+export type NewFood = Omit<FoodItem, 'id' | 'timestamp' | 'mealType' | 'amountValue' | 'baseNutrition'>;
+
+/** 云端一条饮食记录 = 一个文档，带上所属日期 */
+export interface StoredFood extends FoodItem {
+  date: string; // YYYY-MM-DD
+}
+
 export interface DailyLog {
   date: string; // YYYY-MM-DD
   foods: FoodItem[];

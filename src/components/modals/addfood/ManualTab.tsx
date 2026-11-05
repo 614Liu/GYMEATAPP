@@ -1,8 +1,6 @@
 import { motion } from 'motion/react';
-import type { FoodItem } from '../../../types';
+import type { NewFood } from '../../../types';
 import { getAutoCalories } from '../../../lib/nutrition';
-
-type NewFood = Omit<FoodItem, 'id' | 'timestamp' | 'mealType' | 'amountValue' | 'baseNutrition'>;
 
 /** 手动录入表单的草稿状态（全部按字符串存，提交时再转数字） */
 export interface ManualFoodDraft {

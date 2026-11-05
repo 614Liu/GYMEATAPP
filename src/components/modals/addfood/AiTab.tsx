@@ -1,20 +1,31 @@
-import React from 'react';
+import type { ChangeEvent } from 'react';
 import { motion } from 'motion/react';
 import { X, Camera, Image as ImageIcon, Loader2, ChevronRight, Check, Plus } from 'lucide-react';
-import type { FoodItem } from '../../../types';
+import type { NewFood } from '../../../types';
 import type { NutritionResult } from '../../../lib/gemini';
 import { SCORE_BADGE_STYLES } from '../../../constants';
 import { scoreFood } from '../../../lib/foodScore';
+import { scaleAmount, toPer100g } from '../../../lib/nutrition';
 import { MacroBadge } from '../../ui/MacroBadge';
 
-type NewFood = Omit<FoodItem, 'id' | 'timestamp' | 'mealType' | 'amountValue' | 'baseNutrition'>;
+/** 识别结果乘上份量倍数；份量文字要一起放大，否则换算基准会错 */
+function scaledFood(r: NutritionResult, mult: number): NewFood {
+  return {
+    name: r.name || '未命名食物',
+    amount: scaleAmount(r.amount || '1 份', mult),
+    calories: Math.round((r.calories || 0) * mult),
+    protein: Number(((r.protein || 0) * mult).toFixed(1)),
+    carbs: Number(((r.carbs || 0) * mult).toFixed(1)),
+    fat: Number(((r.fat || 0) * mult).toFixed(1)),
+  };
+}
 
 interface AiTabProps {
   selectedImage: string | null;
   setSelectedImage: (img: string | null) => void;
   aiQuery: string;
   setAiQuery: (q: string) => void;
-  onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onImageChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onEstimate: () => void;
   isEstimating: boolean;
   error: string | null;
@@ -116,7 +127,7 @@ export function AiTab({
           <div className="flex justify-between items-start">
             <div>
               <h4 className="font-black text-emerald-900 text-xl tracking-tight">{estimatedResult.name || "未命名食物"}</h4>
-              <p className="text-xs text-emerald-600 font-black uppercase tracking-widest mt-1">{estimatedResult.amount || "未知份量"}{portionMult !== 1 ? ` ×${portionMult}` : ''}</p>
+              <p className="text-xs text-emerald-600 font-black uppercase tracking-widest mt-1">{estimatedResult.amount ? scaleAmount(estimatedResult.amount, portionMult) : "未知份量"}</p>
             </div>
             <div className="text-right">
               <span className="text-3xl font-black text-emerald-900 tracking-tighter">{Math.round((estimatedResult.calories || 0) * portionMult)}</span>
@@ -171,12 +182,8 @@ export function AiTab({
             <MacroBadge label="脂肪" value={Number(((estimatedResult.fat || 0) * portionMult).toFixed(1))} color="orange" />
           </div>
           {(() => {
-            const s = scoreFood({
-              calories: estimatedResult.calories || 0,
-              protein: estimatedResult.protein || 0,
-              carbs: estimatedResult.carbs || 0,
-              fat: estimatedResult.fat || 0,
-            }, fitnessGoal);
+            // 评分门槛按每 100g 定，克类份量先换算；件类没有克重，按这一份评
+            const s = scoreFood(toPer100g(estimatedResult), fitnessGoal);
             return (
               <div className="flex items-center gap-2 px-1">
                 <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${SCORE_BADGE_STYLES[s.grade]}`}>
@@ -188,13 +195,7 @@ export function AiTab({
           })()}
           <div className="grid grid-cols-2 gap-3">
             <motion.button
-              onClick={() => onAddFood({
-                ...estimatedResult,
-                calories: Math.round((estimatedResult.calories || 0) * portionMult),
-                protein: Number(((estimatedResult.protein || 0) * portionMult).toFixed(1)),
-                carbs: Number(((estimatedResult.carbs || 0) * portionMult).toFixed(1)),
-                fat: Number(((estimatedResult.fat || 0) * portionMult).toFixed(1)),
-              } as NewFood)}
+              onClick={() => onAddFood(scaledFood(estimatedResult, portionMult))}
               className="flex-1 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white py-4 rounded-full font-black text-sm shadow-[0_8px_30px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 transition-all active:scale-95 touch-manipulation"
             >
               <Check size={20} />

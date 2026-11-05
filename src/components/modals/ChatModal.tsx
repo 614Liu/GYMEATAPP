@@ -1,18 +1,33 @@
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X, Utensils, Lightbulb } from 'lucide-react';
 import type { ChatMessage } from '../../lib/gemini';
+import { isSubmitEnter } from '../ui/motion';
 
 interface ChatModalProps {
   isOpen: boolean;
   onClose: () => void;
   messages: ChatMessage[];
-  input: string;
-  setInput: (value: string) => void;
   loading: boolean;
-  onSend: (presetText?: string) => void;
+  /** 返回是否已发出 */
+  onSend: (text: string) => Promise<boolean>;
 }
 
-export function ChatModal({ isOpen, onClose, messages, input, setInput, loading, onSend }: ChatModalProps) {
+export function ChatModal({ isOpen, onClose, messages, loading, onSend }: ChatModalProps) {
+  const [input, setInput] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 有新消息或正在等回复时滚到底部
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading, isOpen]);
+
+  const sendTyped = () => {
+    const text = input;
+    onSend(text).then((sent) => { if (sent) setInput(''); });
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -42,13 +57,13 @@ export function ChatModal({ isOpen, onClose, messages, input, setInput, loading,
                   <p className="text-[11px] text-slate-400 font-bold">只回答饮食营养相关问题</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+              <button onClick={onClose} aria-label="关闭" className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
                 <X size={22} />
               </button>
             </div>
 
             {/* messages */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
+            <div ref={listRef} className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar" aria-live="polite">
               {messages.length === 0 && (
                 <div className="text-center text-slate-400 mt-8 px-6">
                   <Sparkles size={32} className="mx-auto mb-3 text-emerald-200" />
@@ -94,12 +109,12 @@ export function ChatModal({ isOpen, onClose, messages, input, setInput, loading,
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
+                onKeyDown={(e) => { if (isSubmitEnter(e)) sendTyped(); }}
                 placeholder="输入你的问题…"
                 className="flex-1 px-4 py-3 bg-slate-50 rounded-2xl outline-none font-medium text-sm focus:bg-slate-100 transition-colors"
               />
               <button
-                onClick={() => onSend()}
+                onClick={sendTyped}
                 disabled={loading || !input.trim()}
                 className="px-5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl transition-colors disabled:opacity-40 text-sm"
               >

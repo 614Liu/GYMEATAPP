@@ -1,96 +1,110 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // ===============================================================
-    // Helper Functions
+    // 工具函数
     // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // 0 ≤ v ≤ max 的数字
+    function num(v, max) {
+      return v is number && v >= 0 && v <= max;
+    }
+
+    function isDate(v) {
+      return v is string && v.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isName(v) {
+      return v is string && v.size() > 0 && v.size() <= 100;
     }
 
     function isValidGoal(goal) {
-      return goal.calories is number && goal.calories > 0 &&
-             goal.protein is number && goal.protein >= 0 &&
-             goal.carbs is number && goal.carbs >= 0 &&
-             goal.fat is number && goal.fat >= 0;
+      return goal is map &&
+             goal.calories is number && goal.calories > 0 && goal.calories <= 20000 &&
+             num(goal.protein, 2000) && num(goal.carbs, 2000) && num(goal.fat, 2000);
     }
 
-    function isValidLibraryFood(data) {
-      return data.id is string && 
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.caloriesPer100g is number &&
-             data.proteinPer100g is number &&
-             data.carbsPer100g is number &&
-             data.fatPer100g is number &&
-             data.ownerUid == request.auth.uid;
+    function isValidUserDoc(data, userId) {
+      return data.uid == userId &&
+             isValidGoal(data.goals) &&
+             (!('fitnessGoal' in data) || data.fitnessGoal in ['gain', 'lose', 'maintain']) &&
+             (!('schemaVersion' in data) || data.schemaVersion is int);
     }
 
-    function isValidFoodItem(food) {
-      return food.id is string &&
-             food.name is string &&
-             food.calories is number &&
-             food.protein is number &&
-             food.carbs is number &&
-             food.fat is number &&
-             food.amount is string &&
-             food.timestamp is number &&
-             (!('mealType' in food) || food.mealType in ['breakfast', 'lunch', 'dinner', 'snack']);
-    }
-
-    function isValidWeightLog(data) {
-      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
-             data.weight is number && data.weight > 0 &&
-             data.ownerUid == request.auth.uid;
-    }
-
-    function isValidWaterLog(data) {
-      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
-             data.amount is number && data.amount >= 0 &&
-             data.ownerUid == request.auth.uid;
-    }
-
-    function isValidDailyLog(data) {
-      return data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+    // 一条饮食记录（v1.10 起每条一个文档）
+    function isValidFood(data, foodId) {
+      return data.keys().hasAll(['id', 'date', 'name', 'calories', 'protein', 'carbs', 'fat', 'amount', 'timestamp', 'ownerUid']) &&
+             data.keys().hasOnly(['id', 'date', 'name', 'calories', 'protein', 'carbs', 'fat', 'amount', 'amountValue',
+                                  'baseNutrition', 'timestamp', 'mealType', 'ownerUid']) &&
+             data.id == foodId &&
              data.ownerUid == request.auth.uid &&
-             data.foods is list;
+             isDate(data.date) &&
+             isName(data.name) &&
+             num(data.calories, 20000) && num(data.protein, 2000) && num(data.carbs, 2000) && num(data.fat, 2000) &&
+             data.amount is string && data.amount.size() <= 60 &&
+             data.timestamp is number &&
+             (!('amountValue' in data) || num(data.amountValue, 100000)) &&
+             (!('baseNutrition' in data) || data.baseNutrition is map) &&
+             (!('mealType' in data) || data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']);
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
+    function isValidLibraryFood(data, foodId) {
+      return data.keys().hasOnly(['id', 'name', 'caloriesPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g', 'createdAt', 'ownerUid']) &&
+             data.id == foodId &&
+             data.ownerUid == request.auth.uid &&
+             isName(data.name) &&
+             num(data.caloriesPer100g, 20000) && num(data.proteinPer100g, 2000) &&
+             num(data.carbsPer100g, 2000) && num(data.fatPer100g, 2000) &&
+             (!('createdAt' in data) || data.createdAt is number);
+    }
 
+    function isValidWeightLog(data, date) {
+      return data.keys().hasOnly(['date', 'weight', 'ownerUid']) &&
+             data.date == date && isDate(data.date) &&
+             data.weight is number && data.weight > 0 && data.weight <= 500 &&
+             data.ownerUid == request.auth.uid;
+    }
+
+    function isValidWaterLog(data, date) {
+      return data.keys().hasOnly(['date', 'amount', 'ownerUid']) &&
+             data.date == date && isDate(data.date) &&
+             num(data.amount, 20000) &&
+             data.ownerUid == request.auth.uid;
+    }
+
+
+    // ===============================================================
+    // 规则
+    // ===============================================================
     match /users/{userId} {
       allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId) && 
-                              request.resource.data.uid == userId &&
-                              isValidGoal(request.resource.data.goals);
+      allow create, update: if isOwner(userId) && isValidUserDoc(request.resource.data, userId);
 
-      match /library/{foodId} {
+      match /foods/{foodId} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidLibraryFood(request.resource.data);
+        allow create, update: if isOwner(userId) && isValidFood(request.resource.data, foodId);
         allow delete: if isOwner(userId);
       }
 
-      match /logs/{date} {
+      match /library/{foodId} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidDailyLog(request.resource.data);
+        allow create, update: if isOwner(userId) && isValidLibraryFood(request.resource.data, foodId);
         allow delete: if isOwner(userId);
       }
 
       match /weightLogs/{date} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidWeightLog(request.resource.data);
+        allow create, update: if isOwner(userId) && isValidWeightLog(request.resource.data, date);
         allow delete: if isOwner(userId);
       }
 
       match /waterLogs/{date} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidWaterLog(request.resource.data);
+        allow create, update: if isOwner(userId) && isValidWaterLog(request.resource.data, date);
         allow delete: if isOwner(userId);
       }
     }

@@ -142,3 +142,19 @@ export function scoreLibraryFood(
     goal
   );
 }
+
+/**
+ * 给一条已记录的食物评分。
+ *
+ * scoreFood 里的热量门槛（<100 kcal 算低热量、≥250 kcal 算高热量密度）是按每 100g 定的，
+ * 不能直接拿「这一份的总量」去比，否则一大份鸡胸肉会被当成高热量、一小块蛋糕被当成低热量。
+ * 克类记录用 baseNutrition（每 100g）；件类记录没有克重，只能按这一份评。
+ */
+export function scoreLoggedFood(
+  food: { calories: number; protein: number; carbs: number; fat: number; baseNutrition?: { calories: number; protein: number; carbs: number; fat: number; unit: 'g' | 'unit' } },
+  goal: string
+): FoodScoreResult {
+  const base = food.baseNutrition;
+  if (base && base.unit === 'g') return scoreFood(base, goal);
+  return scoreFood(food, goal);
+}

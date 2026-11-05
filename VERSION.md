@@ -1,6 +1,151 @@
 # GYMEAT 版本基线
 
-## v1.9-refactor-hardening （当前版本）
+## v1.11-data-sync （当前版本）
+
+换成新的 Firebase 项目，重做数据的存储和同步，加数据导出/导入。**界面外观不变**，服务器 AI 部分**没动**。
+
+### Firebase 项目
+| 项 | 值 |
+|---|---|
+| 项目 ID | `gymeat-614`（账号 614yisi@gmail.com，旧的 AI Studio 项目不再使用，旧数据不迁移） |
+| 方案 | **Spark 免费**，没绑卡，超额只会暂停不会扣钱 |
+| 数据库 | Firestore `(default)`，区域 `eur3`（欧洲） |
+| 登录 | 只开了 Google。已授权网域：localhost、gymeat-614.firebaseapp.com、gymeat-614.web.app、gymeatapp.onrender.com |
+| 配置文件 | 网页 `firebase-config.json`；安卓 `android/app/google-services.json`（两个包名都在里面） |
+
+常用命令：
+```bash
+npm run deploy:rules      # 部署 firestore.rules（改了规则后必须跑）
+npm run test:rules        # 在本地模拟器上测安全规则（要 Java，见下）
+npm test                  # 单元测试
+```
+`test:rules` 需要 Java 在 PATH 里。这台电脑用 Android Studio 自带的：
+`$env:PATH = "E:\新建文件夹\jbr\bin;" + $env:PATH`（PowerShell），再跑命令。
+
+### 安卓：原生谷歌登录
+以前用弹窗登录，安卓 App 的 WebView 里打不开，海外版 APK 实际上一直登录不了。
+现在用 `@capacitor-firebase/authentication`：系统弹出谷歌账号选择，拿到凭证交给网页端 Firebase SDK 登录。
+
+**换电脑打包海外版前，必须登记那台电脑的签名指纹**，否则谷歌登录会失败（每台电脑的 debug 签名不一样）：
+```bash
+keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android
+npx firebase apps:android:sha:create 1:481469387422:android:997c4f57a5e872883ba18f <SHA1>
+npx firebase apps:android:sha:create 1:481469387422:android:997c4f57a5e872883ba18f <SHA256>
+```
+（`keytool` 在 Android Studio 的 `jbr\bin` 里。已登记：这台电脑。）登记后重新下载 `google-services.json`。
+
+### 版本号对应关系（改版本时五处一起改）
+| 位置 | 值 |
+|---|---|
+| `android/app/build.gradle` | `versionCode 11` / `versionName "1.11"` |
+| `src/components/modals/SettingsModal.tsx` 页脚 | `v1.11` |
+| `server.ts` 的 `/api/health` | `v1.11-data-sync` |
+| `package.json` 的 `version` | `1.11.0` |
+| 本文件 | v1.11-data-sync |
+
+### 一、数据只有一份，不再做本地/云端合并
+以前登录后本机和云端各一份，靠「云端优先、本机补缺」合并。这条规则只认新增：
+离线时删掉的记录上线后会复活，离线改的克数会被云端旧值盖回去。
+
+现在：
+- **游客**（未登录、国内版）：数据在本机 localStorage。
+- **登录**：只认云端。Firestore 开了离线缓存（IndexedDB），离线照常读写，写入排队，联网自动上传，App 重启也不丢。
+- 登录那一刻把游客期间的数据**只补不改**地传上去（`lib/accountSetup.ts`），成功后清掉本机那份。
+
+### 二、云端数据结构（schemaVersion 1）
+| 路径 | 内容 |
+|---|---|
+| `users/{uid}` | `goals`、`fitnessGoal`、`schemaVersion` |
+| `users/{uid}/foods/{id}` | 每条饮食记录一个文档，带 `date`。两台设备同时改同一天不会互相覆盖 |
+| `users/{uid}/library/{id}` | 食物库，每 100g |
+| `users/{uid}/weightLogs/{date}` | 体重 |
+| `users/{uid}/waterLogs/{date}` | 饮水，加减用服务端自增 `increment` |
+
+以后改数据结构：`SCHEMA_VERSION` 加 1，在 `setupAccount` 里写迁移。
+
+### 三、只加载最近的数据
+饮食和饮水只加载最近 60 天，体重最近一年，翻到更早的日期时单独加载那一天。免费额度每天 5 万次读，不会随使用时间变长而吃光。
+
+### 四、安全规则（`firestore.rules`）
+- 每个集合都有字段白名单、数值范围、日期格式；`foods` 的 `id` 必须等于文档名；只能读写自己的数据；名单外的集合一律拒绝。
+- 12 个自动测试（`tests/rules/`），GitHub Actions 每次推送都跑。
+- 上传前统一清洗（`lib/records.ts` 的 `sanitize*`），备份文件里多余字段和不合理数值会被清掉。
+
+### 五、数据导出 / 导入（设置 → 数据备份）
+- 导出：全部记录、食物库、体重、饮水、目标 → 一个 JSON 文件。登录时从云端读全量。
+  网页直接下载；安卓 App 写到缓存目录后调起系统分享（插件 `@capacitor/filesystem`、`@capacitor/share`）。
+- 导入：记录只补上没有的，不覆盖已有；目标和健身目标用备份里的。
+
+### 六、其他
+- 应用崩溃时显示「出了点问题 / 重新加载」，技术细节折叠。
+- 过了午夜：如果正在看「今天」，自动切到新的一天。
+- 谷歌头像加载失败（Referer 被拒）已修，失败时显示邮箱首字母。
+- GitHub Actions：类型检查、单元测试、安全规则测试、海外版和国内版构建。
+
+### 已验证
+- 网页版登录（真实账号）：游客数据自动上传并清掉本机、增删改实时同步、刷新后数据还在、云端删除实时反映到页面。
+- 海外版 APK 能编译通过（未在手机上试登录）。
+- 测试数据已从账号里删掉。
+
+### 没验证到的
+- 安卓 App 上的原生谷歌登录和导出分享：要等 UI 做完打新 APK 时在手机上试。
+
+---
+
+## v1.10-code-fixes
+
+这一版只修代码，**界面外观不变**。服务器 AI 部分（Gemini / DeepSeek、
+`/api/estimate`、`/api/coach`、`/api/chat`）**没动**，之后整体重做。
+
+### 一、修复的 bug
+
+| 问题 | 原因 | 修法 |
+|---|---|---|
+| AI 识别后调份量（×1.5）再记录，之后改克数数值会被重复放大 | 热量乘了倍数，份量文字还是「200g」，换算基准算错 | `scaleAmount` 让份量文字跟着放大 |
+| 食物评分不准：大份鸡胸肉被判一般、小块蛋糕被当成低热量 | 评分门槛按每 100g 定，传进去的却是整份数值 | `scoreLoggedFood` 用每 100g 的 `baseNutrition` 评 |
+| 打中文按回车，拼音没选完就发出去 | 回车没判断输入法正在选字 | `isSubmitEnter` 检查 `isComposing` |
+| 设置页「保存修改」不保存 API Key；目标每敲一个字写一次云端；清空会存成 0 被云端拒绝 | 改动直接生效，底部按钮只是关闭 | 设置改成草稿，点保存才一起生效；空值不能保存 |
+| 趋势页体重框回车空值记成 0kg | 没校验 | 体重必须在 0–500 之间 |
+| 体重 65.5 显示成 66 | 数字动画一律取整 | `AnimatedNumber` 加 `decimals` |
+| 退出登录后换账号登录，上一个账号的数据合并进新账号 | 退出没清本机数据 | 退出后清空本机个人数据（云端保留） |
+| 蛋白质/碳水/脂肪在不同地方颜色不一样 | 清单和修改弹窗用了另一套 | 全部统一为 蛋白紫 / 碳水蓝 / 脂肪橙（`MACRO_TEXT`） |
+| 食物库填 0 克添加，数值变成无穷大 | 没校验份量 | 份量必须大于 0 |
+| 没有数字的份量（如「一碗」）按 100 份算 | `parseAmount` 兜底返回 100 | 没数字当 1 份 |
+| 云端写入失败没有提示，还会出未捕获的异常 | 有几处 `setDoc` 没 `catch` | 所有写入统一捕获，失败时提示「云端同步失败，数据已保存在本机」 |
+| 食物库弹窗和添加食物弹窗共用一个错误提示，互相串 | 共用状态 | 各自管各自的 |
+| 收藏库里选中的食物被删后还能用它添加 | 选中状态没更新 | 被删时取消选中 |
+| 同一张图片选第二次没反应 | 文件框没清空 | 选完清空 |
+| 连续快速操作可能丢掉前一次 | 动作读的是上一次渲染的数据 | 数据层用 ref 保存最新值 |
+
+### 二、结构
+
+- `App.tsx` 1970 行 → 约 300 行，只负责拼装。
+- 数据层 `hooks/useNutritionData.ts`：本地存储 + 云端同步 + 所有增删改。4 段几乎一样的同步代码合成一个。
+- AI 教练 `hooks/useCoach.ts`：AI 相关状态都在这里，重做 AI 时只换它和 `lib/gemini.ts`。
+- 云端入口 `lib/cloud.ts`：界面不再直接调 `firebase/*`。Firebase 改成用到时才加载，国内版运行时不下载。
+- 本地存储 `lib/storage.ts`：所有 key 集中管理。
+- 首页拆成 `components/layout/*`、`components/daily/*`、`components/stats/*`、`components/modals/AddFoodModal.tsx`。
+  添加食物弹窗的草稿留在弹窗里，打字不会重渲染整个首页。
+
+### 三、工程
+
+- 装上了 `@types/react` / `@types/react-dom`：**之前 React 部分其实一直没有类型检查**。
+- `tsconfig` 开启 `strict` 和 `noUnusedLocals`，去掉 `main.tsx` 的 `@ts-nocheck`。
+- 打包分块：react / 图表 / 动画 / firebase 各自一块。首屏 JS 1.3MB → 约 870KB（gzip 366KB → 约 260KB）。
+- 新增 `npm test`（vitest），覆盖份量解析与放大、记录换算、评分、同步合并。
+- 安卓构建产物（`android/app/src/main/assets/public` 等）不再提交，`npx cap sync` 会重新生成。
+
+### 没做的（留到后面）
+
+- 服务器 AI：限流可伪造 IP 绕过、`/api/chat` 原样转发消息、没有超时、AI 返回值没校验 —— 随 AI 重做一起处理。
+- `lib/gemini.ts` 里没被调用的 `getMealSuggestions` 先留着，AI 重做时一起删。
+- 依赖没有挪到 devDependencies：`render.yaml` 设了 `NODE_ENV=production`，挪了可能导致 Render 构建跳过 vite。
+- 喝水目标还是固定 2000ml、删除没有撤销、焦点框被全局隐藏 —— 留给 UI 重塑。
+- 国内版数据只在本机，建议尽快做导出/导入（见 `FUTURE_EXPORT_IMPORT.md`）。
+
+---
+
+## v1.9-refactor-hardening
 
 这一版没有新功能，全部是**技术债清理 + bug 修复**。
 外观和交互跟 v1.8 一模一样，改的都是底下的东西。

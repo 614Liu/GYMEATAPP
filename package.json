@@ -1,7 +1,7 @@
 {
   "name": "gymeat",
   "private": true,
-  "version": "1.9.0",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -16,12 +16,18 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run src",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-gymeat \"vitest run tests/rules\"",
+    "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.6.0",
     "@capacitor/android": "^8.4.1",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^22.14.0",
@@ -45,8 +51,13 @@
     "vite-plugin-pwa": "^1.2.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/express": "^5.0.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "cross-env": "^10.1.0",
-    "esbuild": "^0.28.0"
+    "esbuild": "^0.28.0",
+    "firebase-tools": "^14.27.0",
+    "vitest": "^3.2.7"
   }
 }

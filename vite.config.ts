@@ -1,12 +1,33 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+// 大的第三方库各自单独成块：改应用代码后，用户不用重新下载这些没变的库
+const VENDOR_CHUNKS: Record<string, string[]> = {
+  react: ['react', 'react-dom', 'scheduler'],
+  charts: ['recharts', 'd3-', 'victory-vendor'],
+  motion: ['motion', 'framer-motion', 'motion-dom', 'motion-utils'],
+};
+
+function vendorChunk(id: string): string | undefined {
+  const match = id.match(/node_modules[\\/](@[^\\/]+[\\/][^\\/]+|[^\\/]+)/);
+  if (!match) return undefined;
+  const pkg = match[1];
+  for (const [chunk, prefixes] of Object.entries(VENDOR_CHUNKS)) {
+    if (prefixes.some((p) => (p.endsWith('-') ? pkg.startsWith(p) : pkg === p))) return chunk;
+  }
+  return undefined;
+}
+
+export default defineConfig(() => {
   return {
+    build: {
+      rollupOptions: {
+        output: { manualChunks: vendorChunk },
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),

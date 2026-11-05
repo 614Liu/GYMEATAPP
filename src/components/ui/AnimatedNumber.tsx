@@ -1,8 +1,13 @@
 import { useRef, useEffect } from 'react';
 import { animate } from 'motion/react';
 
-export function AnimatedNumber({ value }: { value: number }) {
+/**
+ * 数字变化时滚动过渡。decimals 是保留的小数位，体重这类数值要传 1，
+ * 否则 65.5kg 会显示成 66。
+ */
+export function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const fmt = (v: number) => v.toFixed(decimals);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -12,12 +17,12 @@ export function AnimatedNumber({ value }: { value: number }) {
       duration: 0.8,
       ease: 'easeOut',
       onUpdate: (v) => {
-        node.textContent = Math.round(v).toString();
+        node.textContent = v.toFixed(decimals);
       },
     });
 
     return controls.stop;
-  }, [value]);
+  }, [value, decimals]);
 
-  return <span ref={ref}>{Math.round(value)}</span>;
+  return <span ref={ref}>{fmt(value)}</span>;
 }

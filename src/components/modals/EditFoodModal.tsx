@@ -1,5 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import type { FoodItem } from '../../types';
+import { MACRO_TEXT } from '../../constants';
+import { parseAmount } from '../../lib/nutrition';
 
 interface EditFoodModalProps {
   editingFood: FoodItem | null;
@@ -19,7 +21,7 @@ function getBase(food: FoodItem) {
     return { base: food.baseNutrition, isGram: food.baseNutrition.unit === 'g' };
   }
 
-  const isGram = food.amount.toLowerCase().includes('g') || food.amount.includes('克');
+  const { isGram } = parseAmount(food.amount);
   // 当前值对应的是 amountValue 份 / 克，先除回单位量再放大到基准量
   const per = food.amountValue || (isGram ? 100 : 1);
   const scale = (isGram ? 100 : 1) / per;
@@ -88,20 +90,21 @@ function EditFoodForm({ editingFood, setEditingFood, onSave }: EditFoodModalProp
           </div>
           <div className="p-3 bg-slate-50 rounded-2xl">
             <p className="text-[10px] font-bold text-slate-400">蛋白</p>
-            <p className="font-black text-blue-500">{editingFood.protein}</p>
+            <p className={`font-black ${MACRO_TEXT.protein}`}>{editingFood.protein}</p>
           </div>
           <div className="p-3 bg-slate-50 rounded-2xl">
             <p className="text-[10px] font-bold text-slate-400">碳水</p>
-            <p className="font-black text-violet-500">{editingFood.carbs}</p>
+            <p className={`font-black ${MACRO_TEXT.carbs}`}>{editingFood.carbs}</p>
           </div>
           <div className="p-3 bg-slate-50 rounded-2xl">
             <p className="text-[10px] font-bold text-slate-400">脂肪</p>
-            <p className="font-black text-amber-500">{editingFood.fat}</p>
+            <p className={`font-black ${MACRO_TEXT.fat}`}>{editingFood.fat}</p>
           </div>
         </div>
         <motion.button
           onClick={() => onSave(editingFood)}
-          className="w-full py-4 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-full font-black shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:scale-95 transition-transform touch-manipulation"
+          disabled={!(editingFood.amountValue > 0)}
+          className="w-full py-4 bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-full font-black shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:scale-95 transition-transform touch-manipulation disabled:opacity-50 disabled:grayscale"
         >
           保存修改
         </motion.button>
