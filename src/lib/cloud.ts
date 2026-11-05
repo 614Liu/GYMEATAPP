@@ -97,12 +97,27 @@ export async function signInWithGoogle(): Promise<void> {
   await auth.signInWithCredential(app.auth, auth.GoogleAuthProvider.credential(idToken));
 }
 
+/** 还有改动没传到云端（通常是离线），这时退出会丢掉它们 */
+export class UnsyncedChangesError extends Error {
+  constructor() {
+    super('还有记录没同步到云端，请联网后再退出登录');
+    this.name = 'UnsyncedChangesError';
+  }
+}
+
+/**
+ * 退出登录：
+ * 1. 先等没传完的改动传上去，等不到就不退（否则清缓存会把它们一起删掉）；
+ * 2. 退出谷歌账号（原生端也退，否则下次登录会直接用上一个账号、不让选）；
+ * 3. 删掉本机的离线缓存，上一个账号的数据不留在手机上。
+ */
 export async function signOut(): Promise<void> {
   const { app } = await loadFirebase();
-  // 原生端也要退出，否则下次登录会直接用上一个谷歌账号、不让选
+  if (!(await app.flushPendingWrites())) throw new UnsyncedChangesError();
   const native = await nativeAuthPlugin();
   if (native) await native.signOut().catch(() => {});
   await app.auth.signOut();
+  await app.clearLocalCache();
 }
 
 // ---------- 用户文档 ----------
@@ -111,7 +126,7 @@ export function subscribeUserDoc(uid: string, onData: (data: Record<string, unkn
   return deferredSubscription(async () => {
     const { app, firestore } = await loadFirebase();
     return firestore.onSnapshot(
-      firestore.doc(app.db, 'users', uid),
+      firestore.doc(app.getDb(), 'users', uid),
       (snap) => onData(snap.exists() ? snap.data() : null),
       (err) => console.error('Firestore error (user doc):', err)
     );
@@ -120,13 +135,13 @@ export function subscribeUserDoc(uid: string, onData: (data: Record<string, unkn
 
 export async function fetchUserDoc(uid: string): Promise<Record<string, unknown> | null> {
   const { app, firestore } = await loadFirebase();
-  const snap = await firestore.getDoc(firestore.doc(app.db, 'users', uid));
+  const snap = await firestore.getDoc(firestore.doc(app.getDb(), 'users', uid));
   return snap.exists() ? snap.data() : null;
 }
 
 export async function saveUserDoc(uid: string, data: Record<string, unknown>): Promise<void> {
   const { app, firestore } = await loadFirebase();
-  await firestore.setDoc(firestore.doc(app.db, 'users', uid), data, { merge: true });
+  await firestore.setDoc(firestore.doc(app.getDb(), 'users', uid), data, { merge: true });
 }
 
 // ---------- 子集合 ----------
@@ -150,7 +165,7 @@ export function subscribeCollection<T>(
 ): () => void {
   return deferredSubscription(async () => {
     const { app, firestore: fs } = await loadFirebase();
-    const ref = fs.collection(app.db, 'users', uid, name);
+    const ref = fs.collection(app.getDb(), 'users', uid, name);
     const constraints = [
       ...(filter.since ? [fs.where('date', '>=', filter.since)] : []),
       ...(filter.on ? [fs.where('date', '==', filter.on)] : []),
@@ -166,19 +181,19 @@ export function subscribeCollection<T>(
 /** 一次性读取整个子集合（迁移、导出用） */
 export async function fetchCollection<T>(uid: string, name: CloudCollection): Promise<T[]> {
   const { app, firestore } = await loadFirebase();
-  const snap = await firestore.getDocs(firestore.collection(app.db, 'users', uid, name));
+  const snap = await firestore.getDocs(firestore.collection(app.getDb(), 'users', uid, name));
   return snap.docs.map((d) => d.data() as T);
 }
 
 /** 写入子集合里的一条文档，自动带上 ownerUid（安全规则要求） */
 export async function saveItem(uid: string, name: CloudCollection, id: string, data: object): Promise<void> {
   const { app, firestore } = await loadFirebase();
-  await firestore.setDoc(firestore.doc(app.db, 'users', uid, name, id), { ...data, ownerUid: uid });
+  await firestore.setDoc(firestore.doc(app.getDb(), 'users', uid, name, id), { ...data, ownerUid: uid });
 }
 
 export async function deleteItem(uid: string, name: CloudCollection, id: string): Promise<void> {
   const { app, firestore } = await loadFirebase();
-  await firestore.deleteDoc(firestore.doc(app.db, 'users', uid, name, id));
+  await firestore.deleteDoc(firestore.doc(app.getDb(), 'users', uid, name, id));
 }
 
 /** 批量写入（每批最多 450 条，Firestore 上限 500） */
@@ -186,9 +201,9 @@ export async function saveItems(uid: string, name: CloudCollection, items: { id:
   if (items.length === 0) return;
   const { app, firestore } = await loadFirebase();
   for (let i = 0; i < items.length; i += 450) {
-    const batch = firestore.writeBatch(app.db);
+    const batch = firestore.writeBatch(app.getDb());
     for (const { id, data } of items.slice(i, i + 450)) {
-      batch.set(firestore.doc(app.db, 'users', uid, name, id), { ...data, ownerUid: uid });
+      batch.set(firestore.doc(app.getDb(), 'users', uid, name, id), { ...data, ownerUid: uid });
     }
     await batch.commit();
   }
@@ -201,7 +216,7 @@ export async function saveItems(uid: string, name: CloudCollection, items: { id:
 export async function addWater(uid: string, date: string, delta: number): Promise<void> {
   const { app, firestore } = await loadFirebase();
   await firestore.setDoc(
-    firestore.doc(app.db, 'users', uid, 'waterLogs', date),
+    firestore.doc(app.getDb(), 'users', uid, 'waterLogs', date),
     { date, ownerUid: uid, amount: firestore.increment(delta) },
     { merge: true }
   );

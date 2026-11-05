@@ -60,6 +60,9 @@ function upsertByDate<T extends { date: string }>(list: T[], item: T): T[] {
 interface CloudState {
   foods: StoredFood[];
   extraFoods: StoredFood[];
+  /** 首次快照到了没有：没到之前界面应显示加载中，而不是「没有记录」 */
+  foodsLoaded: boolean;
+  extraLoaded: boolean;
   library: LibraryFood[];
   weightLogs: WeightLog[];
   waterLogs: WaterLog[];
@@ -70,6 +73,7 @@ interface CloudState {
 
 const EMPTY_CLOUD: CloudState = {
   foods: [], extraFoods: [], library: [], weightLogs: [], waterLogs: [], extraWater: [],
+  foodsLoaded: false, extraLoaded: false,
   goals: DEFAULT_GOALS, fitnessGoal: 'maintain',
 };
 
@@ -128,7 +132,7 @@ export function useNutritionData({ user, viewDate, notify }: Options) {
           fitnessGoal: isFitnessGoal(data.fitnessGoal) ? data.fitnessGoal : 'maintain',
         });
       }),
-      cloud.subscribeCollection<StoredFood>(uid, 'foods', (items) => patchCloud({ foods: items.map(stripOwner) }), { since: windows.recent }),
+      cloud.subscribeCollection<StoredFood>(uid, 'foods', (items) => patchCloud({ foods: items.map(stripOwner), foodsLoaded: true }), { since: windows.recent }),
       cloud.subscribeCollection<WaterLog>(uid, 'waterLogs', (items) => patchCloud({ waterLogs: items.map(stripOwner) }), { since: windows.recent }),
       cloud.subscribeCollection<WeightLog>(uid, 'weightLogs', (items) => patchCloud({ weightLogs: items.map(stripOwner) }), { since: windows.weight }),
       cloud.subscribeCollection<LibraryFood>(uid, 'library', (items) => patchCloud({ library: sortByNewest(items.map(stripOwner)) })),
@@ -139,10 +143,10 @@ export function useNutritionData({ user, viewDate, notify }: Options) {
   // 翻到比窗口更早的日期时，单独加载那一天
   const isOldDate = !!uid && viewDate < windows.recent;
   useEffect(() => {
-    patchCloud({ extraFoods: [], extraWater: [] });
+    patchCloud({ extraFoods: [], extraWater: [], extraLoaded: false });
     if (!uid || !isOldDate) return;
     const unsubs = [
-      cloud.subscribeCollection<StoredFood>(uid, 'foods', (items) => patchCloud({ extraFoods: items.map(stripOwner) }), { on: viewDate }),
+      cloud.subscribeCollection<StoredFood>(uid, 'foods', (items) => patchCloud({ extraFoods: items.map(stripOwner), extraLoaded: true }), { on: viewDate }),
       cloud.subscribeCollection<WaterLog>(uid, 'waterLogs', (items) => patchCloud({ extraWater: items.map(stripOwner) }), { on: viewDate }),
     ];
     return () => unsubs.forEach((u) => u());
@@ -301,7 +305,11 @@ export function useNutritionData({ user, viewDate, notify }: Options) {
     return add.foods.length + add.library.length + add.weightLogs.length + add.waterLogs.length;
   }, [uid, setGuest]);
 
+  /** 登录后云端数据还没到（游客模式数据在本机，永远是 false） */
+  const loading = !!uid && (!cloudState.foodsLoaded || (isOldDate && !cloudState.extraLoaded));
+
   return {
+    loading,
     logs, goals, library, weightLogs, waterLogs, fitnessGoal,
     addFood, updateFood, removeFood,
     addLibraryFood, updateLibraryFood, removeLibraryFood,

@@ -2,10 +2,13 @@ import { initializeApp } from 'firebase/app';
 import { Capacitor } from '@capacitor/core';
 import { getAuth, indexedDBLocalPersistence, initializeAuth, type Auth } from 'firebase/auth';
 import {
+  clearIndexedDbPersistence,
   initializeFirestore,
   memoryLocalCache,
   persistentLocalCache,
   persistentMultipleTabManager,
+  terminate,
+  waitForPendingWrites,
   type Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-config.json';
@@ -38,4 +41,32 @@ function createDb(): Firestore {
   }
 }
 
-export const db = createDb();
+let db: Firestore | null = null;
+
+/** 当前的数据库实例（退出登录清缓存后会重建） */
+export function getDb(): Firestore {
+  if (!db) db = createDb();
+  return db;
+}
+
+/** 等待还没传到云端的写入；超时返回 false（通常是离线） */
+export async function flushPendingWrites(timeoutMs = 5000): Promise<boolean> {
+  if (!db) return true;
+  const timeout = new Promise<false>((resolve) => setTimeout(() => resolve(false), timeoutMs));
+  return Promise.race([waitForPendingWrites(db).then(() => true as const), timeout]);
+}
+
+/**
+ * 删掉本机的离线缓存。退出登录后调用：缓存里是上一个账号的数据，
+ * 别人登录自己的账号虽然读不到，但数据仍留在这台手机上。
+ */
+export async function clearLocalCache(): Promise<void> {
+  if (!db) return;
+  const current = db;
+  db = null;
+  await terminate(current);
+  await clearIndexedDbPersistence(current).catch((err) => {
+    // 另一个标签页还开着同一个缓存时会失败，那个页面关闭后下次退出再清
+    console.warn('Could not clear Firestore cache:', err);
+  });
+}

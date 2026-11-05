@@ -84,7 +84,29 @@ function FoodLogItem({ food, fitnessGoal, onEdit, onRemove }: { food: FoodItem }
   );
 }
 
-export function FoodLogList({ foods, fitnessGoal, onEdit, onRemove }: FoodLogListProps) {
+/** 云端数据还没到时的占位（UI 重塑时换成正式的骨架屏） */
+function LoadingPlaceholder() {
+  return (
+    <div className="space-y-3" role="status" aria-label="正在加载记录">
+      {[0, 1].map((i) => (
+        <div key={i} className="h-24 rounded-[2.5rem] bg-slate-100 animate-pulse" />
+      ))}
+    </div>
+  );
+}
+
+export function FoodLogList({ foods, fitnessGoal, onEdit, onRemove, loading = false }: FoodLogListProps & { loading?: boolean }) {
+  if (loading) {
+    return (
+      <motion.section variants={cardVariants} className="space-y-6">
+        <div className="flex items-center gap-2 px-2 text-xl font-black tracking-tighter text-slate-900">
+          <History size={22} className="text-emerald-500" />
+          今日饮食清单
+        </div>
+        <LoadingPlaceholder />
+      </motion.section>
+    );
+  }
   return (
     <motion.section variants={cardVariants} className="space-y-6">
       <div className="flex items-center justify-between px-2">

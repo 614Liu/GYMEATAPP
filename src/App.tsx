@@ -143,7 +143,7 @@ export default function App() {
       notify('已退出登录，数据保留在云端', 'info');
     } catch (err) {
       console.error('Logout failed:', err);
-      notify('退出登录失败，请重试', 'error');
+      notify(err instanceof cloud.UnsyncedChangesError ? err.message : '退出登录失败，请重试', 'error');
     }
   };
 
@@ -206,6 +206,7 @@ export default function App() {
               </div>
               <FoodLogList
                 foods={foods}
+                loading={!isAuthReady || data.loading}
                 fitnessGoal={fitnessGoal}
                 onEdit={setEditingFood}
                 onRemove={(food) => {
