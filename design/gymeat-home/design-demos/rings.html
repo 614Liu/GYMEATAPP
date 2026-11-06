@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 · 三环（改）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Noto+Sans+SC:wght@500;600;700;900&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+  三环（第一版 A 改）
+  - 三环看不懂的原因：四个圈只有三行说明，最外圈热量没标；看不出哪圈是哪个。
+    → 四行说明从外到内一一对应、颜色一致，点一行对应的圈亮起来、其他变淡。
+  - 保留原来界面的特点：火苗 Logo +「健食 by 614」、翡翠绿、粗字重、「差 88g」、
+    早午晚加餐图标、评分标签、AI 营养教练卡、饮水蓝 / 体重紫 / +250ml、「回到今天」。
+  - 玻璃只用在底部导航和「记一笔」弹层，其余是浅灰底白卡。
+*/
+:root {
+  --bg: #f2f4f3; --card: #fff; --ink: #101413; --sub: #59625f; --faint: #6d7673; --line: #edf0ee;
+  --emerald: #10b981; --emerald-deep: #0b7a55; --emerald-soft: #e6f6ef;
+  --kcal: #10b981; --protein: #a855f7; --carbs: #3b82f6; --fat: #f97316;
+  --water: #3b82f6; --weight: #8b5cf6;
+  --num: "Barlow Condensed", "Noto Sans SC", sans-serif;
+}
+body { background: #dfe3e1; color: var(--ink); font-family: "Noto Sans SC", sans-serif; min-height: 100vh; }
+.board { max-width: 1260px; margin: 0 auto; padding: 44px 32px 80px; display: grid; grid-template-columns: 320px auto auto; gap: 44px; align-items: start; }
+.board-h { padding-top: 24px; }
+.board-h h1 { font-size: 40px; font-weight: 900; letter-spacing: -.02em; }
+.board-h h1 small { display: block; font-size: 17px; font-weight: 700; color: var(--sub); margin-top: 6px; }
+.board-h p { margin-top: 16px; font-size: 14.5px; line-height: 1.75; color: #3d4441; }
+.board-h h2 { font-size: 14px; font-weight: 900; margin-top: 20px; }
+.board-h ul { list-style: none; font-size: 13.5px; line-height: 1.95; color: #3d4441; margin-top: 4px; }
+.board-h ul b { color: var(--emerald-deep); }
+.second { margin-top: 110px; transform: scale(.86); transform-origin: top center; }
+
+/* ---------- App ---------- */
+.app { position: absolute; inset: 0; background: var(--bg); color: var(--ink); font-family: "Noto Sans SC", sans-serif; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; padding: 40px 14px 120px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.num { font-family: var(--num); }
+
+/* 品牌头（保留原样式） */
+.top { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 10px; }
+.brand { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 999px; padding: 6px 14px 6px 6px; }
+.brand .logo { width: 34px; height: 34px; border-radius: 50%; background: #1e2a28; color: #fff; display: grid; place-items: center; }
+.brand .logo svg { width: 18px; height: 18px; }
+.brand b { font-size: 17px; font-weight: 900; line-height: 1; display: block; } .brand small { font-size: 10px; font-weight: 700; color: var(--emerald); letter-spacing: .08em; }
+.streak { display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 6px 12px 6px 6px; font-size: 13px; font-weight: 900; }
+.streak i { width: 26px; height: 26px; border-radius: 50%; background: #ff7a1a; color: #fff; display: grid; place-items: center; font: 800 15px var(--num); font-style: normal; }
+
+/* 一周日期条 + 回到今天 */
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: #fff; border-radius: 22px; padding: 6px; }
+.day { text-align: center; padding: 6px 0 5px; border-radius: 16px; font-size: 11px; color: var(--sub); font-weight: 700; }
+.day b { display: block; font: 700 19px var(--num); color: var(--ink); }
+.day i { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--emerald); margin: 2px auto 0; }
+.day.off i { background: transparent; }
+.day.on { background: var(--ink); color: #c9d2ce; } .day.on b { color: #fff; }
+.day.future { opacity: .45; }
+
+/* 三环卡 */
+.hero { background: var(--card); border-radius: 30px; padding: 16px 16px 14px; margin-top: 12px; }
+.say { font-size: 13px; font-weight: 700; color: var(--emerald-deep); background: var(--emerald-soft); border-radius: 14px; padding: 8px 12px; line-height: 1.5; }
+.hero-row { display: grid; grid-template-columns: 158px 1fr; gap: 14px; align-items: center; margin-top: 12px; }
+.rings { position: relative; width: 158px; height: 158px; }
+.rings svg { width: 100%; height: 100%; display: block; }
+.rings circle { transition: opacity .25s; }
+.rings .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.left .lab { font-size: 13px; font-weight: 700; color: var(--sub); }
+.left .big { font: 700 58px var(--num); line-height: .9; letter-spacing: -.01em; }
+.left .big small { font-size: 18px; color: var(--sub); margin-left: 3px; }
+.left .of { font-size: 12px; font-weight: 700; color: var(--faint); margin-top: 4px; }
+.legend { margin-top: 12px; display: grid; gap: 2px; }
+.lg { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 14px; transition: background .2s, opacity .2s; }
+.lg.on { background: #f3f5f4; } .legend.focus .lg:not(.on) { opacity: .45; }
+.lg .sw { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+.lg .sw svg { width: 15px; height: 15px; }
+.lg .n { font-size: 14px; font-weight: 800; } .lg .n small { font-size: 11px; color: var(--faint); font-weight: 700; margin-left: 4px; }
+.lg .v { font: 700 18px var(--num); text-align: right; } .lg .v em { font-style: normal; color: var(--faint); font-size: 14px; }
+.lg .gap { font-size: 12px; font-weight: 800; min-width: 54px; text-align: right; color: var(--sub); }
+.lg .gap.over { color: #e11d48; }
+
+/* 饮水 / 体重 */
+.chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.chip { background: var(--card); border-radius: 24px; padding: 12px 12px 12px 14px; display: flex; align-items: center; justify-content: space-between; }
+.chip .t { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 5px; }
+.chip .t i { width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center; } .chip .t svg { width: 13px; height: 13px; }
+.chip .v { font: 700 26px var(--num); margin-top: 2px; white-space: nowrap; } .chip .v small { font-size: 14px; color: var(--faint); }
+.chip .goal { font-size: 11px; font-weight: 700; color: var(--faint); }
+.chip .btn { border-radius: 14px; padding: 9px 10px; color: #fff; font-size: 13px; font-weight: 900; min-height: 44px; display: grid; place-items: center; }
+
+/* 今日任务 */
+.card { background: var(--card); border-radius: 28px; padding: 14px 14px 6px; margin-top: 12px; }
+.card h3 { font-size: 16px; font-weight: 900; display: flex; justify-content: space-between; align-items: center; padding: 0 4px 6px; }
+.card h3 span { font-size: 12px; font-weight: 800; color: var(--sub); }
+.task { display: grid; grid-template-columns: 30px 1fr auto 44px; gap: 10px; align-items: center; padding: 8px 4px; min-height: 54px; }
+.task + .task { box-shadow: inset 0 1px 0 var(--line); }
+.task .ok { width: 28px; height: 28px; border-radius: 50%; border: 2.5px solid #cfd6d3; display: grid; place-items: center; transition: background .25s, border-color .25s; }
+.task .ok svg { width: 15px; height: 15px; opacity: 0; transition: opacity .2s; }
+.task .n { font-size: 14.5px; font-weight: 800; }
+.task .tr { height: 6px; border-radius: 999px; background: #eef1f0; margin-top: 5px; overflow: hidden; } .task .tr i { display: block; height: 100%; border-radius: 999px; }
+.task .v { font: 700 17px var(--num); text-align: right; } .task .v em { font-style: normal; color: var(--faint); font-size: 13px; }
+.task .go { width: 44px; height: 44px; border-radius: 50%; background: var(--emerald-soft); color: var(--emerald-deep); display: grid; place-items: center; font: 700 24px var(--num); }
+.task.done .ok { background: var(--emerald); border-color: var(--emerald); } .task.done .ok svg { opacity: 1; }
+.task.done .go { background: var(--emerald); color: #fff; font-size: 18px; }
+
+/* AI 营养教练（保留） */
+.coach { background: var(--card); border-radius: 28px; padding: 14px; margin-top: 12px; }
+.coach .h { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 900; }
+.coach .h i { width: 28px; height: 28px; border-radius: 9px; background: var(--emerald-soft); color: var(--emerald); display: grid; place-items: center; } .coach .h svg { width: 16px; height: 16px; }
+.coach p { margin-top: 10px; background: #f6f8f7; border-radius: 16px; padding: 11px 12px; font-size: 13.5px; font-weight: 600; line-height: 1.6; color: #2b322f; }
+.coach .ask { margin-top: 10px; background: var(--ink); color: #fff; border-radius: 16px; padding: 13px; text-align: center; font-size: 14px; font-weight: 900; }
+
+/* 今天吃的（按餐分组，保留图标与评分） */
+.meal-h { display: flex; align-items: center; gap: 8px; padding: 10px 4px 6px; font-size: 13px; font-weight: 900; color: var(--sub); }
+.meal-h svg { width: 17px; height: 17px; }
+.meal-h .sum { margin-left: auto; font: 700 15px var(--num); color: var(--ink); }
+.meal-h .add { width: 30px; height: 30px; border-radius: 50%; background: var(--emerald-soft); color: var(--emerald-deep); display: grid; place-items: center; font: 700 20px var(--num); margin-left: 6px; }
+.food { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center; padding: 6px 4px 10px; }
+.food .pic { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; }
+.food .n { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.food .s { font-size: 12px; color: var(--sub); font-weight: 600; margin-top: 2px; }
+.food .k { font: 700 22px var(--num); }
+.tag { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 7px; white-space: nowrap; }
+.tag.great { background: #e6f6ef; color: #0b7a55; } .tag.good { background: #e0f5f3; color: #0f766e; } .tag.ok { background: #fdf3e2; color: #a16207; }
+.empty-meal { margin: 0 4px 10px; border: 2px dashed #d6ddda; border-radius: 18px; padding: 12px; font-size: 13px; font-weight: 700; color: var(--sub); display: flex; justify-content: space-between; align-items: center; }
+.empty-meal b { color: var(--emerald-deep); font-weight: 900; }
+
+/* 玻璃：底部导航 */
+.nav { position: absolute; left: 0; right: 0; bottom: 0; height: 88px; display: grid; grid-template-columns: repeat(5, 1fr); padding-top: 10px; z-index: 20; background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 -1px 0 rgba(0,0,0,.06); }
+.nav span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; color: #7a8481; }
+.nav span.on { color: var(--ink); }
+.nav svg { width: 24px; height: 24px; }
+.nav .plus { justify-self: center; width: 60px; height: 60px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; margin-top: -22px; box-shadow: 0 10px 24px rgba(16,20,19,.28); }
+
+/* 玻璃：记一笔弹层 */
+.sheet { padding: 0 16px 34px; border-radius: 32px 32px 0 0; background: rgba(250,251,250,.86); -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 -10px 40px rgba(0,0,0,.14); }
+.grip { background: #c9d0cd; }
+.sheet h4 { font-size: 21px; font-weight: 900; margin: 6px 4px 2px; } .sheet .hint { font-size: 13px; font-weight: 700; color: var(--sub); margin: 0 4px 12px; }
+.mt { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.mt div { text-align: center; padding: 9px 0; border-radius: 14px; background: #fff; font-size: 12px; font-weight: 800; color: var(--sub); }
+.mt div svg { width: 16px; height: 16px; display: block; margin: 0 auto 2px; }
+.mt div.on { background: var(--emerald-soft); color: var(--emerald-deep); box-shadow: inset 0 0 0 2px var(--emerald); }
+.ways { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.way { border-radius: 20px; padding: 12px; background: #fff; font-size: 14px; font-weight: 900; min-height: 80px; display: flex; flex-direction: column; justify-content: space-between; }
+.way svg { width: 22px; height: 22px; } .way small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); }
+.way.main { background: var(--ink); color: #fff; } .way.main small { color: #b9c2bf; }
+.qh { font-size: 12px; font-weight: 800; color: var(--sub); margin: 0 4px 4px; }
+.quick { display: grid; grid-template-columns: 50px 1fr auto 44px; gap: 12px; align-items: center; padding: 6px 4px; }
+.quick .pic { width: 50px; height: 50px; border-radius: 15px; overflow: hidden; }
+.quick .n { font-size: 15px; font-weight: 800; } .quick .n small { display: block; font-size: 12px; color: var(--sub); font-weight: 600; }
+.quick .k { font: 700 19px var(--num); }
+.quick .go { width: 44px; height: 44px; border-radius: 50%; background: var(--emerald); color: #fff; display: grid; place-items: center; font: 700 24px var(--num); }
+.toast { position: absolute; left: 50%; top: 52px; transform: translate(-50%, -110px); z-index: 50; padding: 10px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 800; white-space: nowrap; transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+.toast.show { transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-h">
+    <h1>健食<small>三环 · 第一版 A 改</small></h1>
+    <p>圆环从外到内是热量、蛋白质、碳水、脂肪，右边四行说明一一对应。点任意一行，对应的那一圈会亮起来。原来界面的火苗 Logo、翡翠绿、「差 88g」、早午晚餐图标、评分标签、AI 营养教练、饮水蓝和体重紫都留着。</p>
+    <h2>可以点</h2>
+    <ul>
+      <li><b>点圆环旁边的一行</b>　对应那一圈亮起来</li>
+      <li><b>点「+250ml」</b>　饮水和喝水任务一起涨</li>
+      <li><b>点任务右边的 +</b>　推进，完成打勾</li>
+      <li><b>点底部 + 或某顿饭的 +</b>　玻璃弹层升起，可拖走</li>
+      <li><b>点一样常吃的</b>　记进晚餐，四个圈和数字一起动</li>
+    </ul>
+  </div>
+  <div id="main"></div>
+  <div id="second" class="second"></div>
+</div>
+
+<template id="app">
+  <div class="app">
+    <div class="scroll">
+      <div class="top">
+        <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5 5 5.6 5 10.5A5 5 0 0 1 12 18a5 5 0 0 1-5-5.5c0-2.2 1.2-3.6 2.4-4.6.2 1.6 1 2.6 2 3C11 8 11.6 5 12 2Z"/></svg></span><span><b>健食</b><small>BY 614</small></span></div>
+        <div class="streak"><i>12</i>连续 12 天</div>
+      </div>
+      <div class="week">
+        <div class="day" data-press>一<b>3</b><i></i></div><div class="day" data-press>二<b>4</b><i></i></div><div class="day on" data-press>今天<b>5</b><i></i></div>
+        <div class="day future">四<b>6</b><i style="background:transparent"></i></div><div class="day future">五<b>7</b><i style="background:transparent"></i></div><div class="day future">六<b>8</b><i style="background:transparent"></i></div><div class="day future">日<b>9</b><i style="background:transparent"></i></div>
+      </div>
+
+      <section class="hero">
+        <div class="say" data-say>午饭吃得不错。晚上补点蛋白质，今天就圆满了。</div>
+        <div class="hero-row">
+          <div class="rings" data-rings></div>
+          <div class="left"><div class="lab">还能吃</div><div class="big num"><span data-left>825</span><small>kcal</small></div><div class="of" data-of>已吃 1175 / 目标 2000</div></div>
+        </div>
+        <div class="legend" data-legend></div>
+      </section>
+
+      <div class="chips">
+        <div class="chip"><div><div class="t" style="color:var(--water)"><i style="background:#e5effd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg></i>饮水</div><div class="v num"><span data-water>1250</span><small> ml</small></div><div class="goal">目标 2000 ml</div></div><div class="btn" style="background:var(--water)" data-press data-addwater>+250ml</div></div>
+        <div class="chip"><div><div class="t" style="color:var(--weight)"><i style="background:#efeafe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 20h14l-2-12H7zM9 8a3 3 0 0 1 6 0"/></svg></i>体重</div><div class="v num">66.4<small> kg</small></div><div class="goal">比昨天 −0.2</div></div><div class="btn" style="background:var(--weight)" data-press>更新</div></div>
+      </div>
+
+      <section class="card"><h3>今日任务<span data-done>完成 1/4</span></h3><div data-tasks></div></section>
+
+      <section class="coach">
+        <div class="h"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.6L12 15l-1.8-4.4L5.5 9l4.7-1.4Z"/><path d="M18 16l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z"/></svg></i>AI 营养教练</div>
+        <p data-coach>蛋白质还差 76 g。晚餐来一块三文鱼或两个鸡蛋，正好补上，热量也不会超。</p>
+        <div class="ask" data-press>问教练 · 聊聊今天吃什么</div>
+      </section>
+
+      <section class="card"><h3>今天吃的<span data-count>4 样</span></h3><div data-meals></div></section>
+    </div>
+
+    <nav class="nav">
+      <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>今天</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19V11M10 19V5M16 19v-6M21 19H3"/></svg>趋势</span>
+      <div class="plus" data-press data-open="dinner" aria-label="记一笔"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg>食物库</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" stroke-linecap="round"/></svg>我的</span>
+    </nav>
+
+    <div class="backdrop" data-backdrop></div>
+    <div class="sheet" data-sheet>
+      <span class="grip" data-grip></span>
+      <h4 data-grip>记一笔</h4><div class="hint" data-grip data-hint>记到晚餐 · 建议不超过 700 kcal</div>
+      <div class="mt" data-mt></div>
+      <div class="ways">
+        <div class="way main" data-press><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><div>拍照识别<small>AI 估热量</small></div></div>
+        <div class="way" data-press><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg><div>收藏库<small>常吃的</small></div></div>
+        <div class="way" data-press><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg><div>手动<small>自己填</small></div></div>
+      </div>
+      <div class="qh">常吃 · 点一下就记</div>
+      <div data-quick></div>
+    </div>
+    <div class="toast" data-toast></div>
+  </div>
+</template>
+
+<script src="shared.js"></script>
+<script>
+const ICON = {
+  breakfast: '<svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 3v3M12 3v3"/></svg>',
+  lunch: '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  snack: '<svg viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h.01M14 8h.01M15 13h.01M9.5 14.5h.01"/></svg>',
+  dinner: '<svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
+};
+const KCAL_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5 5 5.6 5 10.5A5 5 0 0 1 12 18a5 5 0 0 1-5-5.5c0-2.2 1.2-3.6 2.4-4.6.2 1.6 1 2.6 2 3C11 8 11.6 5 12 2Z"/></svg>';
+const MAC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="5"/></svg>';
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// 食物评分（沿用原来的标签文字）
+const GRADE = { '燕麦牛奶': ['good', '推荐'], '水煮蛋 ×2': ['great', '强烈推荐'], '鸡胸肉饭': ['great', '强烈推荐'], '苹果': ['good', '推荐'], '香煎三文鱼': ['great', '强烈推荐'] };
+const DETAIL = { '燕麦牛奶': '1 碗', '水煮蛋 ×2': '2 个', '鸡胸肉饭': '1 份', '苹果': '1 个', '香煎三文鱼': '150 g' };
+
+function mount(host, { label, openSheet = false } = {}) {
+  const { phone, spring, pressable, pop, sheet, eaten, mealKcal, tasks, QUICK, initialState } = GYM;
+  const s = initialState(); s.water = 1250;
+  const p = phone({ label });
+  host.appendChild(p.wrap);
+  p.content.appendChild(document.getElementById('app').content.cloneNode(true));
+  const $ = (q) => p.content.querySelector(q);
+  pressable(p.content);
+
+  // ---- 四个圈：从外到内 热量 / 蛋白质 / 碳水 / 脂肪 ----
+  const RINGS = [
+    { key: 'kcal', name: '热量', unit: 'kcal', max: 2000, r: 70, w: 13, c: 'var(--kcal)', bg: '#e3f3ec', icon: KCAL_ICON, val: () => eaten(s) },
+    { key: 'protein', name: '蛋白质', unit: 'g', max: 150, r: 53, w: 11, c: 'var(--protein)', bg: '#f1e8fd', icon: MAC_ICON, val: () => s.protein },
+    { key: 'carbs', name: '碳水', unit: 'g', max: 200, r: 38, w: 11, c: 'var(--carbs)', bg: '#e6effd', icon: MAC_ICON, val: () => s.carbs },
+    { key: 'fat', name: '脂肪', unit: 'g', max: 65, r: 23, w: 11, c: 'var(--fat)', bg: '#fdeee3', icon: MAC_ICON, val: () => s.fat },
+  ];
+  $('[data-rings]').innerHTML = `<svg viewBox="0 0 158 158" aria-label="今日营养进度">${RINGS.map((g) => {
+    const C = 2 * Math.PI * g.r;
+    return `<g data-ring="${g.key}"><circle cx="79" cy="79" r="${g.r}" fill="none" stroke="${g.bg}" stroke-width="${g.w}"/>
+      <circle data-arc cx="79" cy="79" r="${g.r}" fill="none" stroke="${g.c}" stroke-width="${g.w}" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}" transform="rotate(-90 79 79)"/></g>`;
+  }).join('')}</svg>`;
+  $('[data-legend]').innerHTML = RINGS.map((g) => `
+    <div class="lg" data-press data-lg="${g.key}">
+      <span class="sw" style="background:${g.bg};color:${g.c}">${g.icon}</span>
+      <span class="n">${g.name}<small>${g.key === 'kcal' ? '最外圈' : ''}</small></span>
+      <span class="v num"><span data-lv></span><em> / ${g.max}${g.key === 'kcal' ? '' : ' g'}</em></span>
+      <span class="gap" data-gap></span>
+    </div>`).join('');
+  const ringSprings = Object.fromEntries(RINGS.map((g) => {
+    const arc = $(`[data-ring="${g.key}"] [data-arc]`), C = 2 * Math.PI * g.r, row = $(`[data-lg="${g.key}"]`);
+    return [g.key, spring(g.val(), (x) => {
+      arc.setAttribute('stroke-dashoffset', C * (1 - Math.min(1, x / g.max)));
+      row.querySelector('[data-lv]').textContent = g.key === 'kcal' ? Math.round(x) : Math.round(x * 10) / 10;
+      const d = Math.round(x - g.max);
+      const gap = row.querySelector('[data-gap]');
+      gap.textContent = d > 0 ? `超 ${d}${g.key === 'kcal' ? '' : 'g'}` : `差 ${-d}${g.key === 'kcal' ? '' : 'g'}`;
+      gap.classList.toggle('over', d > 0);
+    }, { stiffness: 120, damping: 16 })];
+  }));
+  // 点说明行：对应的圈亮，其他变淡；再点一次取消
+  let focus = null;
+  function setFocus(key) {
+    focus = focus === key ? null : key;
+    $('[data-legend]').classList.toggle('focus', !!focus);
+    p.content.querySelectorAll('[data-lg]').forEach((r) => r.classList.toggle('on', r.dataset.lg === focus));
+    p.content.querySelectorAll('[data-ring]').forEach((r) => (r.style.opacity = !focus || r.dataset.ring === focus ? 1 : 0.18));
+    if (focus) pop($(`[data-ring="${focus}"]`));
+  }
+
+  const leftEl = $('[data-left]');
+  const big = spring(eaten(s), (x) => { const l = s.goal - x; leftEl.textContent = l >= 0 ? Math.round(l) : '+' + Math.round(-l); }, { stiffness: 120, damping: 17 });
+  const waterEl = $('[data-water]');
+  const water = spring(s.water, (x) => (waterEl.textContent = Math.round(x)));
+
+  // ---- 任务 ----
+  const TCOLOR = { protein: 'var(--protein)', water: 'var(--water)', meals: 'var(--emerald)', weight: 'var(--weight)' };
+  const tSprings = {};
+  function renderTasks(first) {
+    const list = tasks(s);
+    if (first) {
+      $('[data-tasks]').innerHTML = list.map((t) => `
+        <div class="task" data-task="${t.key}"><span class="ok">${CHECK}</span>
+          <div><div class="n">${t.name}</div><div class="tr"><i data-tb style="background:${TCOLOR[t.key]}"></i></div></div>
+          <div class="v num"><span data-tv></span><em>${t.key === 'weight' ? '' : ' / ' + t.max + (t.unit ? ' ' + t.unit : '')}</em></div>
+          <div class="go" data-press data-go aria-label="${t.name}">+</div></div>`).join('');
+      list.forEach((t) => { const el = $(`[data-task="${t.key}"]`); tSprings[t.key] = spring(t.v, (x) => { el.querySelector('[data-tv]').textContent = t.fmt(x); el.querySelector('[data-tb]').style.width = Math.min(100, x / t.max * 100) + '%'; }, { stiffness: 160, damping: 15 }); });
+    }
+    let done = 0;
+    list.forEach((t) => {
+      const el = $(`[data-task="${t.key}"]`), ok = t.v >= t.max;
+      if (ok) done++;
+      if (ok && !el.classList.contains('done') && !first) { pop(el.querySelector('.ok')); toast(`${t.name} · 完成`); }
+      el.classList.toggle('done', ok); el.querySelector('[data-go]').textContent = ok ? '✓' : '+';
+      tSprings[t.key](t.v);
+    });
+    $('[data-done]').textContent = `完成 ${done}/4`;
+  }
+
+  // ---- 今天吃的 ----
+  function renderMeals() {
+    $('[data-count]').textContent = s.meals.reduce((a, m) => a + m.items.length, 0) + ' 样';
+    $('[data-meals]').innerHTML = s.meals.map((m) => `
+      <div class="meal-h">${ICON[m.key]}${m.name}${m.items.length ? `<span class="sum">${mealKcal(m)} kcal</span>` : '<span class="sum" style="color:var(--faint)">—</span>'}<span class="add" data-press data-open="${m.key}">+</span></div>
+      ${m.items.length ? m.items.map((i) => {
+        const g = GRADE[i.n] || ['ok', '一般'];
+        return `<div class="food" data-press><div class="pic"><img class="ph" src="${i.img}" alt="${i.n}"></div>
+          <div><div class="n">${i.n}<span class="tag ${g[0]}">${g[1]}</span></div><div class="s">${DETAIL[i.n] || '1 份'}</div></div>
+          <div class="k num">${i.k}</div></div>`;
+      }).join('') : `<div class="empty-meal">还没记 · 建议不超过 700 kcal<b data-press data-open="${m.key}">记一笔</b></div>`}`).join('');
+  }
+
+  function toast(msg) { const t = $('[data-toast]'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1700); }
+  function say() {
+    const left = s.goal - eaten(s), lack = Math.round(150 - s.protein);
+    $('[data-say]').textContent = left < 0 ? `今天多吃了 ${-left} kcal，没关系，明天清淡一点就好。`
+      : s.meals[3].items.length ? (lack > 0 ? `晚饭记上了。还剩 ${left} kcal，蛋白质还差 ${lack} g。` : `今天的蛋白质够了，还剩 ${left} kcal，做得很好。`)
+      : `午饭吃得不错。晚上补点蛋白质（还差 ${lack} g），今天就圆满了。`;
+    $('[data-coach]').textContent = lack > 0 ? `蛋白质还差 ${lack} g。晚餐来一块三文鱼或两个鸡蛋，正好补上，热量也不会超。` : '今天三大营养素都很均衡。睡前别再加餐，明天继续保持。';
+  }
+  function refresh() {
+    big(eaten(s)); $('[data-of]').textContent = `已吃 ${eaten(s)} / 目标 2000`;
+    RINGS.forEach((g) => ringSprings[g.key](g.val()));
+    water(s.water); renderMeals(); renderTasks(); say();
+  }
+
+  // ---- 记一笔弹层 ----
+  const sh = sheet(p.screen, $('[data-sheet]'), $('[data-backdrop]'));
+  let target = 3;
+  function openFor(key) {
+    target = Math.max(0, s.meals.findIndex((m) => m.key === key));
+    $('[data-mt]').innerHTML = s.meals.map((m, i) => `<div data-press data-mti="${i}" class="${i === target ? 'on' : ''}">${ICON[m.key]}${m.name}</div>`).join('');
+    $('[data-hint]').textContent = `记到${s.meals[target].name}` + (s.meals[target].key === 'dinner' ? ' · 建议不超过 700 kcal' : '');
+    sh.show();
+  }
+  $('[data-quick]').innerHTML = QUICK.map((q, i) => `<div class="quick" data-press data-q="${i}"><div class="pic"><img class="ph" src="${q.img}" alt=""></div><div class="n">${q.n}<small>蛋白质 ${q.p} g</small></div><div class="k num">${q.k}</div><div class="go">+</div></div>`).join('');
+
+  p.content.addEventListener('click', (e) => {
+    const lg = e.target.closest('[data-lg]'); if (lg) { setFocus(lg.dataset.lg); return; }
+    const op = e.target.closest('[data-open]'); if (op) { openFor(op.dataset.open); return; }
+    const mt = e.target.closest('[data-mti]'); if (mt) { target = +mt.dataset.mti; openFor(s.meals[target].key); return; }
+    if (e.target.closest('[data-addwater]')) { s.water += 250; s.cups = Math.min(8, s.cups + 1); refresh(); return; }
+    const go = e.target.closest('[data-go]');
+    if (go) {
+      const key = go.closest('[data-task]').dataset.task;
+      if (key === 'protein') s.protein = Math.min(150, Math.round((s.protein + 25) * 10) / 10);
+      else if (key === 'water') { s.cups = Math.min(8, s.cups + 1); s.water += 250; }
+      else { openFor('dinner'); return; }
+      refresh(); return;
+    }
+    const q = e.target.closest('[data-q]');
+    if (q) {
+      const item = QUICK[+q.dataset.q];
+      s.meals[target].items.push({ n: item.n, k: item.k, img: item.img });
+      s.protein = Math.min(999, Math.round((s.protein + item.p) * 10) / 10);
+      s.fat = Math.round((s.fat + item.k * 0.3 / 9) * 10) / 10; s.carbs = Math.round((s.carbs + item.k * 0.25 / 4) * 10) / 10;
+      sh.hide(); setTimeout(() => { refresh(); toast(`记上了 · ${item.n} ${item.k} kcal`); }, 200);
+    }
+  });
+
+  renderMeals(); renderTasks(true); refresh();
+  if (openSheet) setTimeout(() => openFor('dinner'), 500);
+}
+mount(document.getElementById('main'), { label: '首页 · 可以点' });
+mount(document.getElementById('second'), { label: '记一笔（玻璃弹层）', openSheet: true });
+</script>
+</body>
+</html>

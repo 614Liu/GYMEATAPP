@@ -224,6 +224,12 @@ export function useNutritionData({ user, viewDate, notify }: Options) {
     else setGuestDay(date, (foods) => foods.map((f) => (f.id === food.id ? food : f)));
   }, [uid, cloudWrite, setGuestDay]);
 
+  /** 撤销删除：原样放回（同一个 id） */
+  const restoreFood = useCallback((date: string, food: FoodItem) => {
+    if (uid) cloudWrite('Restore food', (u) => cloud.saveItem(u, 'foods', food.id, { ...food, date }));
+    else setGuestDay(date, (foods) => (foods.some((f) => f.id === food.id) ? foods : [food, ...foods]));
+  }, [uid, cloudWrite, setGuestDay]);
+
   const removeFood = useCallback((date: string, id: string) => {
     if (uid) cloudWrite('Remove food', (u) => cloud.deleteItem(u, 'foods', id));
     else setGuestDay(date, (foods) => foods.filter((f) => f.id !== id));
@@ -311,7 +317,7 @@ export function useNutritionData({ user, viewDate, notify }: Options) {
   return {
     loading,
     logs, goals, library, weightLogs, waterLogs, fitnessGoal,
-    addFood, updateFood, removeFood,
+    addFood, updateFood, removeFood, restoreFood,
     addLibraryFood, updateLibraryFood, removeLibraryFood,
     changeWater, setWeight, saveGoals, saveFitnessGoal,
     exportAll, importBackup,

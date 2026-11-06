@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 · 首页 v5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+  首页 v4（去 AI 味）
+  - 顶部不进卡片：圆环和营养素直接放在页面上，靠字号和留白分层；只有任务、饮食用卡片。
+  - 圆环：细一点的纯色环，段间留缝，没有光泽、柔光、高光线、白点、扫光；中间不要金属圆盘。
+  - 教练：一段普通的话，前面一个小「教练」标签；不要星星图标和底色。
+  - 间距：页面左右 22 / 区块之间 32 / 卡片内 24。
+  配色（取自食物）：蛋白质＝三文鱼珊瑚、碳水＝谷物金、脂肪＝牛油果青；翡翠绿只留给品牌和「完成」。
+  三大营养素：一行三栏，实色＝已吃，同色淡色＝还没吃的，用长度和颜色表达差多少，不写字。
+*/
+:root {
+  --bg: #f3f5f4; --card: #fff; --ink: #121615; --sub: #5a6360; --faint: #6e7774; --line: #eef1f0;
+  --emerald: #10b981; --emerald-deep: #0b7a55; --emerald-soft: #e7f7f0;
+  --p1: #ff8a7a; --p2: #f0505a;   /* 蛋白质：三文鱼 */
+  --c1: #ffd36a; --c2: #f5a524;   /* 碳水：谷物 */
+  --f1: #6ee0c8; --f2: #16a394;   /* 脂肪：牛油果 */
+  --num: "Inter", "Noto Sans SC", sans-serif;
+  --pad: 22px; --gap: 32px; --in: 24px;
+}
+body { background: #dfe3e1; color: var(--ink); font-family: "Noto Sans SC", sans-serif; min-height: 100vh; }
+.board { max-width: 1260px; margin: 0 auto; padding: 44px 32px 80px; display: grid; grid-template-columns: 320px auto auto; gap: 44px; align-items: start; }
+.board-h { padding-top: 24px; }
+.board-h h1 { font-size: 40px; font-weight: 700; }
+.board-h h1 small { display: block; font-size: 17px; font-weight: 700; color: var(--sub); margin-top: 6px; }
+.board-h p { margin-top: 16px; font-size: 14.5px; line-height: 1.75; color: #3d4441; }
+.board-h h2 { font-size: 14px; font-weight: 700; margin-top: 20px; }
+.board-h ul { list-style: none; font-size: 13.5px; line-height: 1.95; color: #3d4441; margin-top: 4px; }
+.board-h ul b { color: var(--emerald-deep); }
+.fonts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.fonts span { background: #fff; border-radius: 14px; padding: 10px 0; text-align: center; font-size: 16px; font-weight: 600; }
+.fonts span.on { background: var(--ink); color: #fff; }
+.second { margin-top: 110px; transform: scale(.86); transform-origin: top center; }
+
+.app { position: absolute; inset: 0; background: var(--bg); color: var(--ink); font-family: "Noto Sans SC", sans-serif; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; padding: 44px var(--pad) 128px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.app[data-font="inter"] { --num: "Inter", "Noto Sans SC", sans-serif; }
+.app[data-font="sora"]  { --num: "Sora", "Noto Sans SC", sans-serif; }
+.app[data-font="barlow"] { --num: "Barlow Condensed", "Noto Sans SC", sans-serif; }
+.app[data-font="inter"] .disc .big, .app[data-font="sora"] .disc .big { font-size: 60px; letter-spacing: -.045em; }
+.app[data-font="inter"] .mc .v b, .app[data-font="sora"] .mc .v b { font-size: 24px; letter-spacing: -.03em; }
+.stack > * + * { margin-top: var(--gap); }
+
+/* 品牌头 + 日期 */
+.top { display: flex; justify-content: space-between; align-items: center; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo { width: 42px; height: 42px; border-radius: 14px; background: linear-gradient(135deg, #1e293b, #0f172a); color: #fff; display: grid; place-items: center; box-shadow: 0 8px 18px -6px rgba(15,23,42,.45); animation: logoIn .9s cubic-bezier(.3,1.5,.5,1) both; }
+@keyframes logoIn { 0% { transform: scale(.6) rotate(-8deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.brand .logo svg { width: 21px; height: 21px; }
+.brand b { font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: -.04em; display: block; } .brand small { display: block; margin-top: 4px; font-size: 9.5px; font-weight: 700; color: #94a3b8; letter-spacing: .22em; }
+.streak { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--sub); }
+.streak svg { width: 16px; height: 16px; color: #f2711c; }
+.streak b { font: 600 18px var(--num); color: var(--ink); }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.day { text-align: center; padding: 8px 0 7px; border-radius: 18px; font-size: 11px; color: var(--sub); font-weight: 700; }
+.day b { display: block; font: 600 20px var(--num); color: var(--ink); margin-top: 1px; }
+.day i { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--emerald); margin: 3px auto 0; }
+.week { position: relative; }
+.day { position: relative; z-index: 1; transition: color .3s; }
+.day b { transition: color .3s; }
+.day-pill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 18px; background: var(--ink); z-index: 0; }
+.day.on { color: #c9d2ce; } .day.on b { color: #fff; }
+.hero { transform-origin: 50% 0; will-change: transform, opacity; }
+.tile .mark { overflow: visible; }
+.day.future { opacity: .4; } .day.future i { background: transparent; }
+
+/* 主卡 */
+.card { background: var(--card); border-radius: 28px; padding: var(--in); }
+.hero { padding: 8px 2px 0; }
+.donut { position: relative; width: 264px; height: 264px; margin: 0 auto; }
+.donut svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.disc { position: absolute; inset: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.disc .big { font: 600 66px var(--num); line-height: .9; letter-spacing: -.02em; }
+.disc .lab { font-size: 13px; font-weight: 600; color: var(--sub); margin-top: 6px; }
+.eaten { text-align: center; font-size: 13px; font-weight: 600; color: var(--sub); margin-top: 18px; }
+.eaten b { font: 600 17px var(--num); color: var(--ink); }
+
+/* 环：颜色沿着环从浅到深，终点一颗带影子的圆头 */
+.arcfill { position: absolute; border-radius: 50%; pointer-events: none; }
+.caps { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+/* 三大营养素：三个并排的小环，各自写名字和数 */
+.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 30px; }
+.mc { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.mc .ring { position: relative; width: 84px; height: 84px; }
+.mc .ring svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.mc .ring .c { position: absolute; inset: 0; display: grid; place-items: center; }
+.mc .v b { font: 600 22px var(--num); color: var(--ink); letter-spacing: -.02em; }
+.mc .n { margin-top: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+.mc .n i { width: 14px; height: 14px; border-radius: 50%; display: none; place-items: center; color: #fff; }
+.mc .n i svg { width: 9px; height: 9px; }
+.mc.full .n i { display: grid; }
+.mc .g { font: 500 12px var(--num); color: var(--faint); margin-top: 2px; }
+
+/* 教练 */
+.coach { position: relative; border-radius: 28px; padding: 22px 22px 20px; color: var(--ink); background: #fff; overflow: hidden; isolation: isolate; }
+/* 边缘一圈缓慢流动的微光 */
+.coach::before { content: ""; position: absolute; inset: -40%; z-index: -2; background: conic-gradient(from 0deg, transparent 0 50%, rgba(16,185,129,.75) 68%, rgba(110,224,200,.55) 78%, transparent 92%); animation: spin 7s linear infinite; }
+.coach::after { content: ""; position: absolute; inset: 1.5px; border-radius: 26.5px; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, #effaf5 0%, #ffffff 55%); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.coach .hd { display: flex; align-items: center; justify-content: space-between; }
+.coach .label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .02em; }
+.coach .label b { color: var(--ink); font-weight: 600; }
+.coach .dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: breathe 2.4s ease-out infinite; }
+@keyframes breathe { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 100% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } }
+.coach .ask { font-size: 13px; font-weight: 600; color: var(--emerald-deep); display: flex; align-items: center; gap: 4px; padding: 6px 2px; }
+.coach .ask svg { width: 14px; height: 14px; }
+.coach .head { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin-top: 14px; line-height: 1.3; }
+.coach .head em { font-style: normal; color: var(--emerald-deep); font-family: var(--num); }
+.coach .why { font-size: 13.5px; font-weight: 500; color: var(--sub); margin-top: 6px; line-height: 1.6; }
+.coach .gap { margin-top: 16px; }
+.coach .gap .row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--faint); }
+.coach .gap .row b { font-family: var(--num); color: var(--ink); font-weight: 600; }
+.coach .gap .track { height: 12px; border-radius: 999px; background: #f0e9ea; box-shadow: inset 0 1px 2px rgba(16,20,19,.10); margin-top: 8px; padding: 1px; display: flex; }
+.coach .gap .track i { position: relative; display: block; height: 100%; background: linear-gradient(90deg, #ff8a7a, #f0505a); box-shadow: 0 2px 6px -1px rgba(240,80,90,.5); border-radius: 999px; transition: width .6s cubic-bezier(.3,1.3,.5,1); }
+.coach .gap .track u { display: block; height: 100%; background: transparent; transition: width .6s cubic-bezier(.3,1.3,.5,1); }
+.coach .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.coach .pick { display: flex; align-items: center; gap: 10px; background: #f5f8f7; border-radius: 18px; padding: 8px; box-shadow: inset 0 0 0 1px #e8edeb; }
+.coach .pick .pic { width: 40px; height: 40px; border-radius: 12px; overflow: hidden; flex: none; }
+.coach .pick b { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+.coach .pick small { font-size: 12px; font-weight: 600; color: var(--emerald-deep); font-family: var(--num); }
+.coach.ok .gap { display: none; }
+@media (prefers-reduced-motion: reduce) { .coach::before, .coach .dot { animation: none; } }
+
+/* 任务 2×2 */
+.card h3 { font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card h3 span { font-size: 12px; font-weight: 600; color: var(--sub); }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile { border-radius: 22px; padding: 16px; background: #f6f8f7; position: relative; transition: background .25s; min-height: 104px; }
+.tile .n { font-size: 13px; font-weight: 600; color: var(--sub); padding-right: 30px; }
+.tile .v { font: 600 26px var(--num); margin-top: 8px; } .tile .v em { font-style: normal; font-size: 14px; color: var(--faint); }
+.tile .tr { height: 10px; border-radius: 999px; background: #e9eeec; box-shadow: inset 0 1px 2px rgba(16,20,19,.10); margin-top: 10px; padding: 1px; }
+.tile .tr i { position: relative; display: block; height: 100%; min-width: 8px; border-radius: 999px; background: linear-gradient(90deg, #5b6764, #121615); box-shadow: 0 2px 5px -1px rgba(16,20,19,.35); }
+.tile .tr i::after { content: ''; position: absolute; right: 2px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: rgba(255,255,255,.85); }
+.tile .mark { position: absolute; right: 12px; top: 12px; width: 28px; height: 28px; border-radius: 50%; background: #fff; display: grid; place-items: center; font: 600 18px var(--num); color: var(--emerald-deep); }
+.tile .mark svg { width: 14px; height: 14px; }
+.tile.done { background: var(--emerald-soft); } .tile.done .mark { background: var(--emerald); } .tile.done .tr i { background: linear-gradient(90deg, #6ee7b7, #059669); box-shadow: 0 2px 6px -1px rgba(5,150,105,.45); }
+
+/* 今天吃的 */
+.meal-g + .meal-g { margin-top: 18px; padding-top: 18px; box-shadow: inset 0 1px 0 var(--line); }
+.meal-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--sub); }
+.meal-h svg { width: 18px; height: 18px; }
+.meal-h .sum { margin-left: auto; font: 600 16px var(--num); color: var(--ink); }
+.meal-h .add { width: 34px; height: 34px; border-radius: 50%; background: var(--emerald-soft); color: var(--emerald-deep); display: grid; place-items: center; font: 600 21px var(--num); margin-left: 10px; }
+.food { display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center; margin-top: 12px; }
+.food .pic { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; }
+.food .n { font-size: 15px; font-weight: 600; }
+.food .k { font: 600 22px var(--num); }
+.empty-meal { margin-top: 12px; border: 2px dashed #d6ddda; border-radius: 18px; padding: 14px; font-size: 13px; font-weight: 700; color: var(--sub); }
+
+/* 记一笔：不弹窗。中间 + 扇出三个圆按钮；每顿的 + 原地展开常吃 */
+.veil { position: absolute; inset: 0; z-index: 15; background: rgba(243,245,244,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity .3s; }
+.veil.on { opacity: 1; pointer-events: auto; }
+.fan { position: absolute; left: 50%; bottom: 104px; width: 0; height: 0; z-index: 25; }
+.fb { position: absolute; left: -32px; top: -32px; width: 64px; height: 64px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); display: grid; place-items: center;
+  box-shadow: 0 10px 28px rgba(16,20,19,.16), inset 0 0 0 1px #e8edeb; opacity: 0; pointer-events: none;
+  transform: translate(0, 70px) scale(.3); transition: transform .55s cubic-bezier(.3,1.5,.5,1), opacity .25s; font-family: inherit; }
+.fb svg { width: 26px; height: 26px; }
+.fb span { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ink); }
+.fb.main { left: -42px; top: -42px; width: 84px; height: 84px; background: var(--ink); color: #fff; }
+.fb.main svg { width: 32px; height: 32px; }
+.fan.open .fb { opacity: 1; pointer-events: auto; }
+.fan.open .fb[data-act="library"] { transform: translate(-100px, -62px) scale(1); transition-delay: .03s; }
+.fan.open .fb.main { transform: translate(0, -124px) scale(1); }
+.fan.open .fb[data-act="manual"] { transform: translate(100px, -62px) scale(1); transition-delay: .06s; }
+.plus svg { transition: transform .4s cubic-bezier(.3,1.5,.5,1); }
+.plus.open svg { transform: rotate(135deg); }
+.inl { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s cubic-bezier(.3,1.15,.5,1); }
+.inl > div { overflow: hidden; }
+.inl.open { grid-template-rows: 1fr; }
+.inl .row { display: flex; gap: 10px; overflow-x: auto; padding: 14px 2px 4px; scrollbar-width: none; }
+.inl .row::-webkit-scrollbar { display: none; }
+.qc { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 18px; background: #f5f8f7; box-shadow: inset 0 0 0 1px #e8edeb; }
+.qc .pic { width: 40px; height: 40px; border-radius: 12px; overflow: hidden; }
+.qc b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.qc small { font: 600 12px var(--num); color: var(--faint); }
+.meal-h .add { transition: transform .35s cubic-bezier(.3,1.5,.5,1), background .2s; }
+.meal-h .add.open { transform: rotate(45deg); background: var(--ink); color: #fff; }
+
+/* 玻璃：导航 */
+.nav { position: absolute; left: 0; right: 0; bottom: 0; height: 88px; display: grid; grid-template-columns: repeat(5, 1fr); padding-top: 10px; z-index: 20; background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 -1px 0 rgba(0,0,0,.06); }
+.nav span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #7a8481; }
+.nav span.on { color: var(--ink); } .nav svg { width: 24px; height: 24px; }
+.nav .plus { justify-self: center; width: 60px; height: 60px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; margin-top: -22px; box-shadow: 0 10px 24px rgba(16,20,19,.28); }
+.sheet { padding: 0 20px 36px; border-radius: 32px 32px 0 0; background: rgba(250,251,250,.86); -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 -10px 40px rgba(0,0,0,.14); }
+.grip { background: #c9d0cd; }
+.sheet h4 { font-size: 22px; font-weight: 700; margin: 8px 2px 16px; }
+.mt { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.mt div { text-align: center; padding: 10px 0; border-radius: 16px; background: #fff; font-size: 12px; font-weight: 600; color: var(--sub); }
+.mt div svg { width: 18px; height: 18px; display: block; margin: 0 auto 3px; }
+.mt div.on { background: var(--emerald-soft); color: var(--emerald-deep); box-shadow: inset 0 0 0 2px var(--emerald); }
+.ways { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.way { border-radius: 22px; padding: 14px; background: #fff; font-size: 14px; font-weight: 700; min-height: 88px; display: flex; flex-direction: column; justify-content: space-between; }
+.way svg { width: 22px; height: 22px; } .way small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); margin-top: 2px; }
+.way.main { background: var(--ink); color: #fff; } .way.main small { color: #b9c2bf; }
+.qh { font-size: 12px; font-weight: 600; color: var(--sub); margin: 0 2px 6px; }
+.quick { display: grid; grid-template-columns: 52px 1fr auto 44px; gap: 14px; align-items: center; padding: 8px 0; }
+.quick .pic { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; }
+.quick .n { font-size: 15px; font-weight: 600; } .quick .n small { display: block; font-size: 12px; color: var(--sub); font-weight: 600; }
+.quick .k { font: 600 20px var(--num); }
+.quick .go { width: 44px; height: 44px; border-radius: 50%; background: var(--emerald); color: #fff; display: grid; place-items: center; font: 600 24px var(--num); }
+.toast { position: absolute; left: 50%; top: 52px; transform: translate(-50%, -110px); z-index: 50; padding: 10px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+.toast.show { transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-h">
+    <h1>健食<small>首页 v5 · 热量大环＋三个小环、启动页 logo</small></h1>
+    <p>字重整体降下来，数字换了更精致的字体（下面可以切换对比）；进度条加粗；教练变成一张「AI 洞察卡」（浅色，边缘一圈流动的绿光）：大字结论、蛋白质缺口条、两条点了就能记的建议。</p>
+    <h2>数字字体（点了切换）</h2>
+    <div class="fonts" data-fonts><span data-press data-f="inter" class="on" style="font-family:Inter">Inter</span><span data-press data-f="sora" style="font-family:Sora">Sora</span><span data-press data-f="barlow" style="font-family:Barlow Condensed">Barlow</span></div>
+    <h2>可以点</h2>
+    <ul>
+      <li><b>点 AI 教练里的建议</b>　直接记进晚餐</li>
+      <li><b>点任务方块</b>　推进一步，完成变绿打勾</li>
+      <li><b>点底部中间的 +</b>　扇出拍照 / 收藏库 / 手动三个按钮</li>
+      <li><b>点某顿饭旁边的 +</b>　原地展开常吃，点一样飞进圆环</li>
+      <li><b>点一样常吃的</b>　记进去，圆环和营养素细条一起变</li>
+    </ul>
+  </div>
+  <div id="main"></div>
+  <div id="second" class="second"></div>
+</div>
+
+<template id="app">
+  <div class="app" data-font="inter">
+    <div class="scroll"><div class="stack">
+      <div class="top">
+        <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span><span><b>健食</b><small>BY 614</small></span></div>
+        <div class="streak"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5 5 5.6 5 10.5A5 5 0 0 1 12 18a5 5 0 0 1-5-5.5c0-2.2 1.2-3.6 2.4-4.6.2 1.6 1 2.6 2 3C11 8 11.6 5 12 2Z"/></svg>连续 <b>12</b> 天</div>
+      </div>
+      <div class="week">
+        <div class="day" data-press>一<b>3</b><i></i></div><div class="day" data-press>二<b>4</b><i></i></div><div class="day on" data-press>今天<b>5</b><i></i></div>
+        <div class="day future">四<b>6</b><i></i></div><div class="day future">五<b>7</b><i></i></div><div class="day future">六<b>8</b><i></i></div><div class="day future">日<b>9</b><i></i></div>
+      </div>
+
+      <section class="hero">
+        <div class="donut"><svg viewBox="0 0 264 264" data-donut aria-label="今日热量"></svg>
+          <div class="disc"><div class="big num" data-left>825</div><div class="lab">还能吃 · kcal</div></div></div>
+        <div class="eaten">已吃 <b data-eaten>1175</b> / 目标 <b>2000</b> kcal</div>
+        <div class="macros" data-macros></div>
+      </section>
+
+      <section class="coach" data-coach>
+        <div class="hd"><span class="label"><span class="dot"></span><b>AI 教练</b>· 实时分析</span><span class="ask" data-press>问教练<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></span></div>
+        <div class="head" data-head></div>
+        <div class="why" data-why></div>
+        <div class="gap"><div class="row"><span>蛋白质</span><span><b data-pg></b> / 150 g</span></div><div class="track"><i data-pi></i><u data-pu></u></div></div>
+        <div class="picks" data-picks></div>
+      </section>
+
+      <section class="card"><h3>今日任务<span data-done>完成 1/4</span></h3><div class="tgrid" data-tasks></div></section>
+      <section class="card"><h3>今天吃的<span data-count>4 样</span></h3><div data-meals></div></section>
+    </div></div>
+
+    <nav class="nav">
+      <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>今天</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19V11M10 19V5M16 19v-6M21 19H3"/></svg>趋势</span>
+      <div class="plus" data-press data-fan-toggle aria-label="记一笔"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg>食物库</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" stroke-linecap="round"/></svg>我的</span>
+    </nav>
+
+    <div class="veil" data-veil></div>
+    <div class="fan" data-fan>
+      <button class="fb" data-press data-act="library" aria-label="收藏库"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4h12v17l-6-4-6 4z"/></svg><span>收藏库</span></button>
+      <button class="fb main" data-press data-act="camera" aria-label="拍照识别"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>拍照识别</span></button>
+      <button class="fb" data-press data-act="manual" aria-label="手动"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg><span>手动</span></button>
+    </div>
+    <div class="toast" data-toast></div>
+  </div>
+</template>
+
+<script src="shared.js"></script>
+<script>
+const ICON = {
+  breakfast: '<svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 3v3M12 3v3"/></svg>',
+  lunch: '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  snack: '<svg viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h.01M14 8h.01M15 13h.01M9.5 14.5h.01"/></svg>',
+  dinner: '<svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2.2" stroke-linecap="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
+};
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const MACROS = [
+  { key: 'protein', name: '蛋白质', max: 150, kcalPer: 4, a: '#ff8a7a', b: '#f0505a', glow: 'rgba(240,80,90,.45)', ink: '#c9323d', track: 'rgba(240,80,90,.16)' },
+  { key: 'carbs', name: '碳水', max: 200, kcalPer: 4, a: '#ffd36a', b: '#f5a524', glow: 'rgba(245,165,36,.45)', ink: '#b26f05', track: 'rgba(245,165,36,.18)' },
+  { key: 'fat', name: '脂肪', max: 65, kcalPer: 9, a: '#6ee0c8', b: '#16a394', glow: 'rgba(22,163,148,.45)', ink: '#0d7f73', track: 'rgba(22,163,148,.16)' },
+];
+
+function mount(host, { label, openSheet = false } = {}) {
+  const { phone, spring, pressable, pop, sheet, eaten, mealKcal, tasks, QUICK, initialState } = GYM;
+  const s = initialState(); s.water = 1250;
+  const p = phone({ label });
+  host.appendChild(p.wrap);
+  p.content.appendChild(document.getElementById('app').content.cloneNode(true));
+  const $ = (q) => p.content.querySelector(q);
+  pressable(p.content);
+  
+  // 环的通用画法：track 底 + conic 渐变 + 两颗圆头
+  function makeRing(host, { size, r, w, track, from, to, shadow }) {
+    const o = size / 2;
+    host.insertAdjacentHTML('beforeend', `<svg class="caps0" viewBox="0 0 ${size} ${size}" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible"><circle cx="${o}" cy="${o}" r="${r}" fill="none" stroke="${track}" stroke-width="${w}"/></svg>
+      <div class="arcfill" style="inset:${o - r - w / 2}px;-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - ${w}px),#000 calc(100% - ${w - .6}px));mask:radial-gradient(farthest-side,transparent calc(100% - ${w}px),#000 calc(100% - ${w - .6}px))"></div>
+      <svg class="caps" viewBox="0 0 ${size} ${size}"><circle data-c0 cx="${o}" cy="${o - r}" r="${w / 2}"/><circle data-c1 r="${w / 2}" style="filter:drop-shadow(${shadow})"/></svg>`);
+    const fill = host.querySelector('.arcfill'), c0 = host.querySelector('[data-c0]'), c1 = host.querySelector('[data-c1]');
+    return (f, colors) => {
+      const [a, b] = colors || [from, to];
+      const g = Math.max(0, f), deg = Math.min(1, g) * 360;
+      fill.style.background = g >= 1 ? `conic-gradient(${a}, ${b})` : `conic-gradient(${a} 0deg, ${b} ${deg}deg, transparent ${deg}deg)`;
+      fill.style.opacity = g < 0.005 ? 0 : 1;
+      c0.setAttribute('fill', a); c0.style.opacity = g < 0.005 ? 0 : 1;
+      const ang = (Math.min(1, g) * 360 - 90) * Math.PI / 180;
+      c1.setAttribute('cx', o + r * Math.cos(ang)); c1.setAttribute('cy', o + r * Math.sin(ang));
+      c1.setAttribute('fill', b); c1.style.opacity = g < 0.005 ? 0 : 1;
+    };
+  }
+
+  /* ---- 大环：只表示热量，一圈＝目标；头上一颗带影子的圆头；超了变珊瑚色 ---- */
+  const uid = Math.random().toString(36).slice(2, 7);
+  const svg = $('[data-donut]'); svg.remove();
+  const calRing = makeRing($('.donut'), { size: 264, r: 112, w: 22, track: '#e7ecea', from: '#a7f3d0', to: '#059669', shadow: '0 2px 3px rgba(5,80,60,.35)' });
+  $('.donut').appendChild($('.disc'));
+  function drawCal(x) {
+    const f = Math.max(0, x / s.goal);
+    if (f <= 1) calRing(f);
+    else calRing(Math.min(1, f - 1) || 0.001, ['#ffb4a8', '#e5484d']);
+  }
+  /* ---- 三大营养素：实色＝已吃，淡色＝还没吃 ---- */
+  const MR = 34, MW = 10, MC = 2 * Math.PI * MR;
+  $('[data-macros]').innerHTML = MACROS.map((m) => `
+    <div class="mc" data-mc="${m.key}" data-press>
+      <div class="ring" data-ring><div class="c v"><b data-val></b></div></div>
+      <div class="n" style="color:${m.ink}">${m.name}<i style="background:${m.b}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg></i></div>
+      <div class="g">目标 ${m.max} g</div>
+    </div>`).join('');
+  const macroSprings = Object.fromEntries(MACROS.map((m) => {
+    const el = $(`[data-mc="${m.key}"]`);
+    const ringEl = el.querySelector('[data-ring]'), cv = ringEl.querySelector('.c');
+    const draw = makeRing(ringEl, { size: 84, r: 34, w: 10, track: m.track, from: m.a, to: m.b, shadow: `0 1px 2px ${m.glow}` });
+    ringEl.appendChild(cv);
+    return [m.key, spring(s[m.key], (x) => {
+      draw(Math.min(1, x / m.max));
+      el.querySelector('[data-val]').textContent = Math.round(x);
+      el.classList.toggle('full', x >= m.max - 0.5);
+    })];
+  }));
+
+  const leftEl = $('[data-left]');
+  const big = spring(eaten(s), (x) => { drawCal(x); const l = s.goal - x; leftEl.textContent = l >= 0 ? Math.round(l) : '+' + Math.round(-l); }, { stiffness: 120, damping: 17 });
+
+  /* ---- 任务 2×2（含喝水、称体重） ---- */
+  const tS = {};
+  function renderTasks(first) {
+    const list = tasks(s);
+    if (first) {
+      $('[data-tasks]').innerHTML = list.map((t) => `<div class="tile" data-press data-task="${t.key}"><div class="n">${t.name}</div>
+        <div class="v num"><span data-tv></span><em>${t.key === 'weight' ? '' : ' / ' + t.max + (t.unit ? ' ' + t.unit : '')}</em></div>
+        <div class="tr"><i data-tb></i></div><span class="mark" data-mark>+</span></div>`).join('');
+      list.forEach((t) => { const el = $(`[data-task="${t.key}"]`); tS[t.key] = spring(t.v, (x) => { el.querySelector('[data-tv]').textContent = t.fmt(x); el.querySelector('[data-tb]').style.width = Math.min(100, x / t.max * 100) + '%'; }, { stiffness: 160, damping: 15 }); });
+    }
+    let done = 0;
+    list.forEach((t) => {
+      const el = $(`[data-task="${t.key}"]`), ok = t.v >= t.max;
+      if (ok) done++;
+      if (ok && !el.classList.contains('done') && !first) { pop(el); setTimeout(() => burst(el.querySelector('[data-mark]')), 0); toast(`${t.name} · 完成`); }
+      el.classList.toggle('done', ok); el.querySelector('[data-mark]').innerHTML = ok ? CHECK : '+';
+      tS[t.key](t.v);
+    });
+    $('[data-done]').textContent = `完成 ${done}/4`;
+  }
+
+  function renderMeals() {
+    $('[data-count]').textContent = s.meals.reduce((a, m) => a + m.items.length, 0) + ' 样';
+    $('[data-meals]').innerHTML = s.meals.map((m) => `<div class="meal-g">
+      <div class="meal-h">${ICON[m.key]}${m.name}<span class="sum">${m.items.length ? mealKcal(m) + ' kcal' : ''}</span><span class="add ${openMeal === m.key ? 'open' : ''}" data-press data-open="${m.key}">+</span></div>
+      <div class="inl ${openMeal === m.key ? 'open' : ''}" data-inl="${m.key}"><div><div class="row">${QUICK.map((q, i) => `<div class="qc" data-press data-q="${i}" data-meal="${m.key}"><div class="pic"><img class="ph" src="${q.img}" alt=""></div><div><b>${q.n}</b><small>${q.k} kcal</small></div></div>`).join('')}</div></div></div>
+      ${m.items.length ? m.items.map((i) => `<div class="food" data-press><div class="pic"><img class="ph" src="${i.img}" alt="${i.n}"></div><div class="n">${i.n}</div><div class="k num">${i.k}</div></div>`).join('')
+        : '<div class="empty-meal">还没记 · 建议不超过 700 kcal</div>'}</div>`).join('');
+  }
+
+  function toast(msg) { const t = $('[data-toast]'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1700); }
+  function say() {
+    const left = s.goal - eaten(s), lack = Math.max(0, Math.round(150 - s.protein));
+    const card = $('[data-coach]');
+    card.classList.toggle('ok', lack === 0);
+    if (left < 0) { $('[data-head]').textContent = `今天多吃了 ${-left} kcal`; $('[data-why]').textContent = '没关系，明天清淡一点、多走走就补回来了。'; }
+    else if (lack > 0) {
+      $('[data-head]').innerHTML = `晚上补 <em>${lack} g</em> 蛋白质`;
+      $('[data-why]').textContent = `还剩 ${left} kcal，选高蛋白、低油的，正好吃满不超。`;
+    } else { $('[data-head]').textContent = '今天的蛋白质够了'; $('[data-why]').textContent = `还剩 ${left} kcal，晚上清淡点就是完美的一天。`; }
+    $('[data-pg]').textContent = Math.round(s.protein * 10) / 10;
+    $('[data-pi]').style.width = Math.min(100, s.protein / 150 * 100) + '%';
+    $('[data-pu]').style.width = Math.max(0, (150 - s.protein) / 150 * 100) + '%';
+    // 两条建议：只推还装得下、能补蛋白的
+    const picks = QUICK.map((q, i) => ({ ...q, i })).filter((q) => q.p >= 10 && q.k <= Math.max(left, 0)).slice(0, 2);
+    $('[data-picks]').innerHTML = picks.map((q) => `<div class="pick" data-press data-q="${q.i}" data-direct><div class="pic"><img class="ph" src="${q.img}" alt=""></div><div><b>${q.n}</b><small>+${q.p}g 蛋白 · ${q.k}</small></div></div>`).join('');
+    $('[data-picks]').style.display = picks.length && lack > 0 ? '' : 'none';
+  }
+  function refresh() {
+    big(eaten(s)); $('[data-eaten]').textContent = eaten(s);
+    MACROS.forEach((m) => { macroSprings[m.key](s[m.key]); });
+    renderMeals(); renderTasks(); say();
+  }
+
+  let target = 3, openMeal = null;
+  // 每顿的 +：原地展开 / 收起常吃
+  function openFor(key) {
+    openMeal = openMeal === key ? null : key;
+    target = Math.max(0, s.meals.findIndex((m) => m.key === key));
+    p.content.querySelectorAll('[data-inl]').forEach((el) => el.classList.toggle('open', el.dataset.inl === openMeal));
+    p.content.querySelectorAll('[data-open]').forEach((el) => el.classList.toggle('open', el.dataset.open === openMeal));
+    if (openMeal) setTimeout(() => $(`[data-inl="${openMeal}"]`).scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+  }
+  // 中间的 +：扇出三个按钮
+  let fanOpen = false;
+  function toggleFan(on = !fanOpen) {
+    fanOpen = on;
+    $('[data-fan]').classList.toggle('open', on);
+    $('[data-veil]').classList.toggle('on', on);
+    $('[data-fan-toggle]').classList.toggle('open', on);
+  }
+  p.content.addEventListener('click', (e) => {
+    if (e.target.closest('[data-fan-toggle]')) { toggleFan(); return; }
+    if (e.target.closest('[data-veil]')) { toggleFan(false); return; }
+    const act = e.target.closest('[data-act]');
+    if (act) {
+      toggleFan(false);
+      if (act.dataset.act === 'library') setTimeout(() => { if (openMeal !== 'dinner') openFor('dinner'); }, 200);
+      else toast(act.dataset.act === 'camera' ? '打开相机 · 拍一下就识别' : '手动填写');
+      return;
+    }
+    const op = e.target.closest('[data-open]'); if (op) { openFor(op.dataset.open); return; }
+    const tile = e.target.closest('[data-task]');
+    if (tile) {
+      const key = tile.dataset.task;
+      if (key === 'protein') s.protein = Math.min(150, Math.round((s.protein + 25) * 10) / 10);
+      else if (key === 'water') { s.cups = Math.min(8, s.cups + 1); s.water += 250; }
+      else if (key === 'meals') { if (openMeal !== 'dinner') openFor('dinner'); return; }
+      else return;
+      refresh(); return;
+    }
+    const q = e.target.closest('[data-q]');
+    if (q) {
+      target = q.dataset.meal ? s.meals.findIndex((m) => m.key === q.dataset.meal) : 3;
+      openMeal = null;
+      const item = QUICK[+q.dataset.q];
+      s.meals[target].items.push({ n: item.n, k: item.k, img: item.img });
+      s.protein = Math.round((s.protein + item.p) * 10) / 10;
+      s.fat = Math.round((s.fat + item.k * 0.3 / 9) * 10) / 10; s.carbs = Math.round((s.carbs + item.k * 0.25 / 4) * 10) / 10;
+      // 招牌动作：食物照片飞进圆环中心，落下的一刻圆环一弹，再更新数据
+      const from = q.querySelector('img');
+      flyIntoRing(from, () => { refresh(); toast(`记上了 · ${item.n} ${item.k} kcal`); });
+    }
+    // 日期条：黑色胶囊滑过去
+    const day = e.target.closest('.day:not(.future)');
+    if (day) moveDayPill(day);
+  });
+
+  /* ================= 动效 ================= */
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const scroller = $('.scroll'), hero = $('.hero'), donut = $('.donut');
+
+  // 1. 入场：圆环三段依次画出，数字从 2000 数到剩余，三根条依次长出
+  function intro() {
+    MACROS.forEach((m) => { macroSprings[m.key].jump(0); });
+    big.jump(0);
+    if (REDUCED) { refresh(); return; }
+    setTimeout(() => big(eaten(s)), 200);
+    MACROS.forEach((m, i) => {
+      setTimeout(() => macroSprings[m.key](s[m.key]), 420 + i * 120);
+    });
+  }
+
+  // 2. 食物飞进圆环
+  function flyIntoRing(img, done) {
+    if (REDUCED || !img) { done(); return; }
+    const screenR = p.screen.getBoundingClientRect(), scale = screenR.width / p.screen.offsetWidth;
+    const a = img.getBoundingClientRect(), d = donut.getBoundingClientRect();
+    const ghost = img.cloneNode();
+    Object.assign(ghost.style, { position: 'absolute', zIndex: 60, borderRadius: '14px', objectFit: 'cover', pointerEvents: 'none',
+      left: (a.left - screenR.left) / scale + 'px', top: (a.top - screenR.top) / scale + 'px', width: a.width / scale + 'px', height: a.height / scale + 'px',
+      boxShadow: '0 10px 24px rgba(0,0,0,.25)' });
+    p.screen.appendChild(ghost);
+    const dx = (d.left + d.width / 2 - a.left - a.width / 2) / scale, dy = (d.top + d.height / 2 - a.top - a.height / 2) / scale;
+    // 先确保圆环在视野里
+    scroller.scrollTo({ top: 0, behavior: 'smooth' });
+    ghost.animate([
+      { transform: 'translate(0,0) scale(1) rotate(0deg)', borderRadius: '14px', opacity: 1 },
+      { transform: `translate(${dx * 0.55}px, ${dy * 0.55 - 60}px) scale(1.15) rotate(-8deg)`, borderRadius: '50%', opacity: 1, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(.15) rotate(10deg)`, borderRadius: '50%', opacity: 0 },
+    ], { duration: 720, easing: 'cubic-bezier(.45,0,.2,1)', fill: 'forwards' }).onfinish = () => {
+      ghost.remove();
+      donut.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(.98)' }, { transform: 'scale(1)' }], { duration: 520, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+      done();
+    };
+  }
+
+  // 3. 完成任务：勾一笔画出 + 一圈小点溅开
+  function burst(mark) {
+    if (REDUCED || !mark) return;
+    const path = mark.querySelector('path');
+    if (path) { const L = 22; path.style.strokeDasharray = L; path.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: 380, easing: 'ease-out', delay: 80, fill: 'backwards' }); }
+    for (let i = 0; i < 8; i++) {
+      const dot = document.createElement('i');
+      const ang = i / 8 * Math.PI * 2;
+      Object.assign(dot.style, { position: 'absolute', left: '50%', top: '50%', width: '5px', height: '5px', marginLeft: '-2.5px', marginTop: '-2.5px', borderRadius: '50%', background: i % 2 ? '#10b981' : '#6ee0c8', pointerEvents: 'none' });
+      mark.appendChild(dot);
+      dot.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: `translate(${Math.cos(ang) * 26}px, ${Math.sin(ang) * 26}px) scale(.4)`, opacity: 0 }], { duration: 560, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => dot.remove();
+    }
+  }
+
+  // 4. 日期条：胶囊滑动
+  const week = $('.week'), pill = document.createElement('span');
+  pill.className = 'day-pill'; week.prepend(pill);
+  function moveDayPill(day, instant) {
+    week.querySelectorAll('.day').forEach((d) => d.classList.toggle('on', d === day));
+    const wr = week.getBoundingClientRect(), r = day.getBoundingClientRect(), k = wr.width / week.offsetWidth || 1;
+    pill.style.transition = instant || REDUCED ? 'none' : 'transform .45s cubic-bezier(.3,1.35,.5,1), width .3s';
+    pill.style.width = r.width / k + 'px';
+    pill.style.transform = `translateX(${(r.left - wr.left) / k}px)`;
+  }
+  requestAnimationFrame(() => moveDayPill(week.querySelector('.day.on'), true));
+
+  // 5. 往下滑：圆环轻轻缩小、变淡，像退到后面
+  scroller.addEventListener('scroll', () => {
+    if (REDUCED) return;
+    const t = Math.min(1, scroller.scrollTop / 320);
+    hero.style.transform = `scale(${1 - t * 0.08}) translateY(${t * 18}px)`;
+    hero.style.opacity = String(1 - t * 0.55);
+  }, { passive: true });
+
+  renderMeals(); renderTasks(true); refresh(); intro();
+  if (openSheet) setTimeout(() => toggleFan(true), 600);
+}
+mount(document.getElementById('main'), { label: '首页 · 可以点' });
+GYM.pressable(document.querySelector('[data-fonts]'));
+document.querySelector('[data-fonts]').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-f]'); if (!b) return;
+  document.querySelectorAll('[data-f]').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.app').forEach((a) => (a.dataset.font = b.dataset.f));
+});
+mount(document.getElementById('second'), { label: '记一笔（点中间的 +）', openSheet: true });
+</script>
+</body>
+</html>

@@ -126,3 +126,40 @@ export function toPer100g(
     converted,
   };
 }
+
+/**
+ * 一条记录的换算基准：克类是「每 100g」，件类是「每 1 份」。
+ * 老数据可能没有 baseNutrition，按当前份量反推补齐。
+ */
+export function foodBase(food: FoodItem): { base: FoodItem['baseNutrition']; isGram: boolean; unitLabel: string } {
+  const unitLabel = food.amount.replace(/[\d.]+/g, '').trim() || '份';
+  if (food.baseNutrition) return { base: food.baseNutrition, isGram: food.baseNutrition.unit === 'g', unitLabel };
+  const { isGram } = parseAmount(food.amount);
+  const per = food.amountValue || (isGram ? 100 : 1);
+  const scale = (isGram ? 100 : 1) / per;
+  return {
+    isGram, unitLabel,
+    base: { calories: food.calories * scale, protein: food.protein * scale, carbs: food.carbs * scale, fat: food.fat * scale, unit: isGram ? 'g' : 'unit' },
+  };
+}
+
+/** 改份量：按固定基准换算（不能用会漂移的 amountValue 当除数） */
+export function rescaleFood(food: FoodItem, value: number): FoodItem {
+  const { base, isGram, unitLabel } = foodBase(food);
+  const ratio = isGram ? value / 100 : value;
+  return {
+    ...food,
+    amountValue: value,
+    amount: isGram ? `${value}g` : `${value} ${unitLabel === 'g' ? '份' : unitLabel}`,
+    calories: Math.round(base.calories * ratio),
+    protein: round1(base.protein * ratio),
+    carbs: round1(base.carbs * ratio),
+    fat: round1(base.fat * ratio),
+    baseNutrition: base,
+  };
+}
+
+/** 已记过的一条 → 再记一次用的数据 */
+export function toNewFood(f: FoodItem): NewFood {
+  return { name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, amount: f.amount };
+}

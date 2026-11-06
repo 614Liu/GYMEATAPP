@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 · 方向一 能按下去的一天</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Noto+Sans+SC:wght@500;700;900&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+  方向一｜最佳设计师 Andy Works（(Not Boring) Habits，2022 Apple Design Award）
+  借：满版一个饱和色、一屏一个巨大主角、有厚度能按下去的按钮、粗圆大数字。
+  色：嫩绿 #D4FF3F 满版 + 墨紫黑 #1B1330 字；完成态用墨色底嫩绿字反过来。
+*/
+:root { --lime: #d4ff3f; --lime-deep: #a6cc12; --ink: #1b1330; --cream: #fbfbf2; --cream-edge: #dfe0c9; --orange: #ff8a1f; }
+body { background: var(--ink); color: #fff; font-family: "Noto Sans SC", sans-serif; min-height: 100vh; }
+.board { max-width: 1180px; margin: 0 auto; padding: 48px 32px 80px; display: grid; grid-template-columns: 1fr auto auto; gap: 40px; align-items: start; }
+.board-h { grid-column: 1; padding-top: 40px; }
+.board-h .name { font: 800 64px "Bricolage Grotesque"; color: var(--lime); letter-spacing: -.04em; line-height: .95; }
+.board-h .name small { display: block; font: 900 26px "Noto Sans SC"; color: #fff; letter-spacing: 0; margin-top: 10px; }
+.board-h p { margin-top: 22px; font-size: 15px; line-height: 1.75; color: #d9d6e4; max-width: 340px; }
+.board-h ul { margin-top: 22px; list-style: none; font-size: 14px; line-height: 2; color: #d9d6e4; }
+.board-h ul b { color: var(--lime); }
+.second { transform: translateY(120px) rotate(2deg) scale(.86); transform-origin: top center; }
+
+/* ---------- App ---------- */
+.app { position: absolute; inset: 0; background: var(--lime); color: var(--ink); font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif; }
+.hero { padding: 46px 22px 0; position: relative; }
+.hero .lab { font: 900 18px "Noto Sans SC"; }
+.hero .big { font-size: 150px; font-weight: 800; letter-spacing: -.055em; line-height: .84; margin-top: 6px; display: flex; align-items: baseline; }
+.hero .big small { font-size: 26px; letter-spacing: 0; margin-left: 6px; font-weight: 700; }
+.hero .bar { height: 14px; border-radius: 999px; background: rgba(27,19,48,.14); margin-top: 16px; overflow: hidden; }
+.hero .bar i { display: block; height: 100%; background: var(--ink); border-radius: 999px; }
+.hero .meta { display: flex; justify-content: space-between; font: 700 13px "Noto Sans SC"; margin-top: 8px; }
+.streak { position: absolute; right: 18px; top: 44px; background: var(--ink); color: var(--lime); border-radius: 999px; padding: 8px 14px 8px 10px; font: 900 15px "Noto Sans SC"; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.streak i { width: 22px; height: 22px; border-radius: 50%; background: var(--orange); display: grid; place-items: center; font: 800 12px "Bricolage Grotesque"; color: var(--ink); font-style: normal; }
+.plates { display: flex; gap: 12px; padding: 18px 22px 0; }
+.plate { width: 84px; flex: none; text-align: center; font: 700 12px "Noto Sans SC"; }
+.plate .pic { width: 84px; height: 84px; border-radius: 26px; overflow: hidden; border: 4px solid #fff; box-shadow: 0 6px 0 var(--lime-deep); }
+.plate:nth-child(odd) .pic { transform: rotate(-4deg); } .plate:nth-child(even) .pic { transform: rotate(3deg); }
+.plate .k { margin-top: 8px; }
+.plate.empty .pic { border: 3px dashed var(--ink); background: transparent; box-shadow: none; display: grid; place-items: center; font: 800 32px "Bricolage Grotesque"; transform: none; }
+.panel { position: absolute; left: 0; right: 0; top: 432px; bottom: 0; background: var(--cream); border-radius: 36px 36px 0 0; padding: 20px 16px 0; }
+.panel h3 { font: 900 20px "Noto Sans SC"; display: flex; justify-content: space-between; align-items: baseline; margin: 0 6px 12px; }
+.panel h3 span { font-size: 13px; font-weight: 700; opacity: .55; }
+.tasks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.task { position: relative; background: #fff; border-radius: 26px; padding: 14px 14px 12px; box-shadow: 0 6px 0 var(--cream-edge); transition: background .25s, box-shadow .25s; }
+.task .n { font: 900 15px "Noto Sans SC"; }
+.task .v { font-size: 34px; font-weight: 800; letter-spacing: -.03em; margin-top: 2px; }
+.task .v small { font-size: 15px; opacity: .5; letter-spacing: 0; }
+.task .track { height: 8px; border-radius: 999px; background: #efefe0; margin-top: 6px; overflow: hidden; }
+.task .track i { display: block; height: 100%; border-radius: 999px; background: var(--ink); }
+.task .add { position: absolute; right: 10px; top: 10px; width: 40px; height: 40px; border-radius: 14px; background: var(--lime); display: grid; place-items: center; font: 800 24px "Bricolage Grotesque"; box-shadow: 0 4px 0 var(--lime-deep); }
+.task.done { background: var(--ink); color: var(--lime); box-shadow: 0 6px 0 #000; }
+.task.done .track { background: rgba(212,255,63,.2); } .task.done .track i { background: var(--lime); }
+.task.done .add { background: var(--lime); color: var(--ink); box-shadow: 0 4px 0 var(--lime-deep); }
+.nav { position: absolute; left: 16px; right: 16px; bottom: 22px; height: 68px; background: var(--ink); border-radius: 999px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; z-index: 20; }
+.nav span { text-align: center; color: #9b95ad; font: 700 12px "Noto Sans SC"; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.nav span.on { color: var(--lime); }
+.nav svg { width: 22px; height: 22px; }
+.nav .plus { justify-self: center; width: 60px; height: 60px; border-radius: 50%; background: var(--lime); display: grid; place-items: center; box-shadow: 0 5px 0 var(--lime-deep); margin-top: -26px; border: 5px solid var(--ink); }
+.nav .plus svg { width: 28px; height: 28px; color: var(--ink); }
+
+/* 添加食物弹层 */
+.sheet { background: var(--cream); border-radius: 32px 32px 0 0; padding: 0 16px 34px; color: var(--ink); font-family: "Noto Sans SC"; }
+.grip { background: #cfd0b8; }
+.sheet h4 { font: 900 22px "Noto Sans SC"; margin: 6px 6px 14px; }
+.ways { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.way { border-radius: 22px; padding: 14px 12px; font: 900 15px "Noto Sans SC"; background: #fff; box-shadow: 0 5px 0 var(--cream-edge); min-height: 92px; display: flex; flex-direction: column; justify-content: space-between; }
+.way.main { background: var(--ink); color: var(--lime); box-shadow: 0 5px 0 #000; }
+.way small { font-size: 12px; font-weight: 700; opacity: .6; }
+.quick-h { font: 700 13px "Noto Sans SC"; opacity: .6; margin: 0 6px 8px; }
+.quick { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 22px; padding: 8px 10px 8px 8px; margin-bottom: 8px; box-shadow: 0 4px 0 var(--cream-edge); }
+.quick .pic { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; flex: none; }
+.quick .n { font: 900 15px "Noto Sans SC"; flex: 1; } .quick .n small { display: block; font: 700 12px "Noto Sans SC"; opacity: .55; }
+.quick .k { font: 800 22px "Bricolage Grotesque"; margin-right: 6px; }
+.quick .go { width: 40px; height: 40px; border-radius: 14px; background: var(--lime); display: grid; place-items: center; font: 800 22px "Bricolage Grotesque"; box-shadow: 0 4px 0 var(--lime-deep); }
+.toast { position: absolute; left: 50%; top: 40px; transform: translate(-50%, -80px); background: var(--ink); color: var(--lime); padding: 10px 16px; border-radius: 999px; font: 900 14px "Noto Sans SC"; z-index: 50; transition: transform .45s cubic-bezier(.3,1.5,.5,1); white-space: nowrap; }
+.toast.show { transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-h">
+    <div class="name">GYMEAT<small>能按下去的一天</small></div>
+    <p>整屏一个嫩绿色，最大的就是「还能吃 825」。今天吃过的饭是贴在上面的照片，下面是四个有厚度的任务按钮——按下去会陷，完成了翻成墨色。</p>
+    <ul>
+      <li><b>点任务右上角的 +</b>　推进一格，满了翻面</li>
+      <li><b>点底部中间的 +</b>　弹出记一笔，可以往下拖走</li>
+      <li><b>点一样常吃的</b>　记进晚餐，825 跟着减</li>
+    </ul>
+  </div>
+  <div id="main"></div>
+  <div id="second" class="second"></div>
+</div>
+
+<template id="app">
+  <div class="app">
+    <div class="hero">
+      <div class="streak" data-streak><i>12</i>连续 12 天</div>
+      <div class="lab">还能吃</div>
+      <div class="big num"><span data-left>825</span><small>kcal</small></div>
+      <div class="bar"><i data-bar></i></div>
+      <div class="meta"><span data-eaten>已吃 1175</span><span>目标 2000</span></div>
+    </div>
+    <div class="plates" data-plates></div>
+    <div class="panel">
+      <h3>今日任务<span data-done>完成 1/4</span></h3>
+      <div class="tasks" data-tasks></div>
+    </div>
+    <nav class="nav">
+      <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 11h16a8 8 0 0 1-16 0Z"/><path d="M9 7c0-1.5 1.5-1.5 1.5-3M13.5 7c0-1.5 1.5-1.5 1.5-3"/></svg>今天</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19V11M10 19V5M16 19v-6M21 19H3"/></svg>趋势</span>
+      <div class="plus" data-press data-open><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg>食物库</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" stroke-linecap="round"/></svg>我的</span>
+    </nav>
+    <div class="backdrop" data-backdrop></div>
+    <div class="sheet" data-sheet>
+      <span class="grip" data-grip></span>
+      <h4 data-grip>记一笔 · 晚餐</h4>
+      <div class="ways">
+        <div class="way main" data-press>拍照识别<small>AI 估热量</small></div>
+        <div class="way" data-press>食物库<small>12 样</small></div>
+        <div class="way" data-press>手动<small>自己填</small></div>
+      </div>
+      <div class="quick-h">常吃 · 点一下就记</div>
+      <div data-quick></div>
+    </div>
+    <div class="toast" data-toast></div>
+  </div>
+</template>
+
+<script src="shared.js"></script>
+<script>
+function mount(host, { openSheet = false, label } = {}) {
+  const { phone, spring, pressable, pop, sheet, eaten, mealKcal, tasks, QUICK, initialState } = GYM;
+  const p = phone({ label });
+  host.appendChild(p.wrap);
+  p.content.appendChild(document.getElementById('app').content.cloneNode(true));
+  const $ = (s) => p.content.querySelector(s);
+  pressable(p.content);
+  const s = initialState();
+
+  // 大数字和进度条：弹簧
+  const leftEl = $('[data-left]'), barEl = $('[data-bar]');
+  const big = spring(eaten(s), (x) => {
+    const left = s.goal - x;
+    leftEl.textContent = left >= 0 ? Math.round(left) : '+' + Math.round(-left);
+    barEl.style.width = Math.min(100, x / s.goal * 100) + '%';
+  }, { stiffness: 120, damping: 17 });
+
+  function renderPlates() {
+    $('[data-plates]').innerHTML = s.meals.map((m) => m.items.length
+      ? `<div class="plate" data-press><div class="pic"><img class="ph" src="${m.items[m.items.length - 1].img}" alt="${m.name}"></div><div class="k">${m.name} ${GYM.mealKcal(m)}</div></div>`
+      : `<div class="plate empty" data-press data-open><div class="pic">+</div><div class="k">${m.name}</div></div>`).join('');
+  }
+
+  // 任务：每个数字自己一根弹簧
+  const taskSprings = {};
+  function renderTasks(first) {
+    const list = tasks(s);
+    if (first) {
+      $('[data-tasks]').innerHTML = list.map((t) => `
+        <div class="task" data-press="sink" data-task="${t.key}">
+          <div class="n">${t.short}</div>
+          <div class="v num"><span data-tv>${t.fmt(t.v)}</span><small>${t.key === 'weight' ? '' : '/' + t.max + (t.unit ? ' ' + t.unit : '')}</small></div>
+          <div class="track"><i data-tb></i></div>
+          <div class="add" data-add>+</div>
+        </div>`).join('');
+      list.forEach((t) => {
+        const el = $(`[data-task="${t.key}"]`);
+        taskSprings[t.key] = spring(t.v, (x) => {
+          el.querySelector('[data-tv]').textContent = t.fmt(x);
+          el.querySelector('[data-tb]').style.width = Math.min(100, x / t.max * 100) + '%';
+        }, { stiffness: 160, damping: 15 });
+      });
+    }
+    let done = 0;
+    list.forEach((t) => {
+      const el = $(`[data-task="${t.key}"]`);
+      const isDone = t.v >= t.max;
+      if (isDone) done++;
+      if (isDone && !el.classList.contains('done') && !first) { el.classList.add('done'); pop(el); toast(`${t.short} 完成！`); }
+      if (isDone) el.classList.add('done');
+      el.querySelector('[data-add]').textContent = isDone ? '✓' : '+';
+      taskSprings[t.key](t.v);
+    });
+    $('[data-done]').textContent = `完成 ${done}/4`;
+  }
+
+  function toast(msg) {
+    const t = $('[data-toast]'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  function update() { big(eaten(s)); $('[data-eaten]').textContent = '已吃 ' + eaten(s); renderPlates(); renderTasks(); }
+
+  // 任务的 +
+  p.content.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-task]');
+    if (!card) return;
+    const key = card.dataset.task;
+    if (key === 'protein') s.protein = Math.min(150, Math.round((s.protein + 25) * 10) / 10);
+    if (key === 'water') s.cups = Math.min(8, s.cups + 1);
+    if (key === 'meals' || key === 'weight') { sh.show(); return; }
+    renderTasks();
+  });
+
+  // 弹层
+  const sh = sheet(p.screen, $('[data-sheet]'), $('[data-backdrop]'));
+  $('[data-quick]').innerHTML = QUICK.map((q, i) => `
+    <div class="quick" data-press data-q="${i}">
+      <div class="pic"><img class="ph" src="${q.img}" alt=""></div>
+      <div class="n">${q.n}<small>蛋白 ${q.p} g</small></div>
+      <div class="k num">${q.k}</div><div class="go">+</div>
+    </div>`).join('');
+  p.content.addEventListener('click', (e) => {
+    if (e.target.closest('[data-open]')) sh.show();
+    const q = e.target.closest('[data-q]');
+    if (q) {
+      const item = QUICK[+q.dataset.q];
+      s.meals[3].items.push({ n: item.n, k: item.k, img: item.img });
+      s.protein = Math.min(150, Math.round((s.protein + item.p) * 10) / 10);
+      sh.hide(); setTimeout(() => { update(); toast(`记上了 · ${item.n} ${item.k}`); }, 180);
+    }
+  });
+
+  renderPlates(); renderTasks(true);
+  if (openSheet) setTimeout(() => sh.show(), 400);
+}
+mount(document.getElementById('main'), { label: '首页 · 可以点' });
+mount(document.getElementById('second'), { label: '记一笔弹层', openSheet: true });
+</script>
+</body>
+</html>

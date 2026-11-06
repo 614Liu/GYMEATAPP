@@ -1,0 +1,21 @@
+/* 安卓手机框（Pixel 8 比例，内容区 412×892），三个方向共用 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.pf { display: inline-block; vertical-align: top; }
+.pf-label { font-size: 13px; margin: 0 0 10px 6px; opacity: .75; font-weight: 600; }
+.pf-body { padding: 10px; background: #1a1a1a; border-radius: 44px; box-shadow: 0 0 0 2px #2a2a2a, 0 30px 70px rgba(0,0,0,.28); }
+.pf-screen { position: relative; width: 412px; height: 892px; border-radius: 36px; overflow: hidden; }
+.pf-status { position: absolute; top: 0; left: 0; right: 0; height: 32px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font: 500 14px Roboto, -apple-system, sans-serif; z-index: 40; pointer-events: none; }
+.pf-icons { display: flex; align-items: center; gap: 6px; }
+.pf-icons b { font-size: 11px; font-weight: 600; }
+.pf-batt { width: 22px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; padding: 1px; display: block; }
+.pf-batt i { display: block; width: 100%; height: 100%; background: currentColor; border-radius: 1px; }
+.pf-hole { position: absolute; top: 10px; left: 50%; width: 14px; height: 14px; margin-left: -7px; background: #000; border-radius: 50%; z-index: 41; }
+.pf-content { position: absolute; inset: 0; overflow: hidden; }
+.pf-gesture { position: absolute; bottom: 8px; left: 50%; width: 100px; height: 4px; margin-left: -50px; border-radius: 999px; z-index: 42; }
+[data-press] { cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.42); opacity: 0; pointer-events: none; z-index: 30; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 31; transform: translateY(100%); visibility: hidden; touch-action: none; }
+.grip { display: block; width: 44px; height: 5px; border-radius: 999px; margin: 10px auto 6px; }
+.ph { width: 100%; height: 100%; object-fit: cover; display: block; }
+.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

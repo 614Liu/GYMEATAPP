@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 · 趋势</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+  趋势页：沿用首页 v5 的颜色、字体、间距和交互。
+  - 体重：大数字 + 曲线，手指按住曲线左右滑看某一天（松手回到今天）；下面原地 − / + 记体重，不弹窗。
+  - 热量：每天一根柱子 + 目标虚线；超了珊瑚色，今天空心（还在进行）；点柱子看数。
+  - 三大营养素：三个小环＝平均每天，和首页一样。
+  - 打卡：30 天小方格，连续天数。
+  - 本周小结：首页的 AI 卡样式。
+*/
+:root {
+  --bg: #f3f5f4; --card: #fff; --ink: #121615; --sub: #5a6360; --faint: #6e7774; --line: #eef1f0;
+  --emerald: #10b981; --emerald-deep: #0b7a55; --emerald-soft: #e7f7f0;
+  --coral: #f0505a; --coral-soft: #fde4e1;
+  --num: "Inter", "Noto Sans SC", sans-serif;
+  --pad: 22px; --gap: 32px; --in: 24px;
+}
+body { background: #dfe3e1; color: var(--ink); font-family: "Noto Sans SC", sans-serif; min-height: 100vh; }
+.board { max-width: 1260px; margin: 0 auto; padding: 44px 32px 80px; display: grid; grid-template-columns: 320px auto auto; gap: 44px; align-items: start; }
+.board-h { padding-top: 24px; }
+.board-h h1 { font-size: 40px; font-weight: 700; }
+.board-h h1 small { display: block; font-size: 17px; font-weight: 700; color: var(--sub); margin-top: 6px; }
+.board-h p { margin-top: 16px; font-size: 14.5px; line-height: 1.75; color: #3d4441; }
+.board-h h2 { font-size: 14px; font-weight: 700; margin-top: 20px; }
+.board-h ul { list-style: none; font-size: 13.5px; line-height: 1.95; color: #3d4441; margin-top: 4px; }
+.board-h ul b { color: var(--emerald-deep); }
+.second { margin-top: 110px; transform: scale(.86); transform-origin: top center; }
+
+.app { position: absolute; inset: 0; background: var(--bg); color: var(--ink); font-family: "Noto Sans SC", sans-serif; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; padding: 44px var(--pad) 128px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.stack > * + * { margin-top: var(--gap); }
+.card { background: var(--card); border-radius: 28px; padding: var(--in); }
+.card h3 { font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+.card h3 span { font-size: 12px; font-weight: 600; color: var(--sub); }
+.card h3 span b { font: 600 14px var(--num); color: var(--ink); }
+
+/* 标题 + 7/30 天切换 */
+.th { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; }
+.th h1 { font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: #e7ecea; border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 2px rgba(16,20,19,.08); }
+.seg button { position: relative; z-index: 1; border: 0; background: none; font: 600 13px "Noto Sans SC", sans-serif; color: var(--sub); padding: 8px 16px; border-radius: 999px; transition: color .3s; }
+.seg button.on { color: var(--ink); }
+.seg-pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(16,20,19,.12); }
+.seg[data-r="30"] .seg-pill { transform: translateX(100%); }
+
+/* 体重 */
+.wt-h { display: flex; justify-content: space-between; align-items: center; }
+.wt-h .lab { font-size: 13px; font-weight: 600; color: var(--sub); transition: color .2s; }
+.wt-h .lab.scrub { color: var(--ink); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; font: 600 13px var(--num); background: var(--emerald-soft); color: var(--emerald-deep); }
+.chip.up { background: var(--coral-soft); color: #c9323d; }
+.chip small { font: 600 11px "Noto Sans SC", sans-serif; opacity: .8; }
+.wt-big { margin-top: 6px; display: flex; align-items: baseline; gap: 6px; }
+.wt-big b { font: 600 60px var(--num); letter-spacing: -.045em; line-height: 1; }
+.wt-big em { font-style: normal; font: 500 18px var(--num); color: var(--faint); }
+.chart { margin-top: 16px; position: relative; touch-action: none; user-select: none; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.bubble { position: absolute; top: 0; transform: translate(-50%, -6px) scale(.8); transform-origin: 50% 100%; padding: 5px 10px; border-radius: 10px; background: var(--ink); color: #fff; font: 600 12px var(--num); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s, transform .35s cubic-bezier(.3,1.6,.5,1); }
+.bubble.on { opacity: 1; transform: translate(-50%, -6px) scale(1); }
+.halo { animation: halo 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes halo { 0% { transform: scale(1); opacity: .45; } 100% { transform: scale(3.2); opacity: 0; } }
+
+/* 原地记体重 */
+.wlog { margin-top: 18px; display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; background: #fff; border-radius: 22px; padding: 12px 12px 12px 18px; }
+.wlog .t { font-size: 14px; font-weight: 600; } .wlog .t small { display: block; font-size: 12px; color: var(--faint); font-weight: 500; margin-top: 2px; }
+.step { position: relative; display: flex; align-items: center; background: #f1f4f3; border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 2px rgba(16,20,19,.08); }
+.step button { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); font: 600 20px var(--num); display: grid; place-items: center; box-shadow: 0 1px 3px rgba(16,20,19,.12); touch-action: none; transition: background .25s, color .25s, transform .4s cubic-bezier(.3,1.7,.5,1); }
+.step button.down { transform: scale(.8); transition: transform 70ms ease-out, background .25s, color .25s; }
+.step button.hold { background: var(--ink); color: #fff; }
+.step button.hold::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(16,185,129,.7); animation: holdRing .6s ease-out infinite; }
+@keyframes holdRing { from { transform: scale(.9); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.step .rip { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px #10b981; pointer-events: none; }
+.step .fly { position: absolute; top: -4px; font: 700 13px var(--num); color: var(--emerald-deep); pointer-events: none; white-space: nowrap; }
+.step .acc { position: absolute; left: 50%; top: -38px; transform: translate(-50%, 6px) scale(.85); padding: 5px 10px; border-radius: 10px; background: var(--ink); color: #fff; font: 600 13px var(--num); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s, transform .35s cubic-bezier(.3,1.6,.5,1); }
+.step .acc.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.step .acc::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; background: var(--ink); transform: rotate(45deg); border-radius: 2px; }
+.step b { position: relative; min-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.step b .v { font: 600 18px var(--num); letter-spacing: -.01em; }
+/* 小秤盘：每格 0.1 kg，长刻度＝整公斤；中间绿线不动，刻度滑 */
+.ruler { position: relative; width: 60px; height: 7px; background:
+    repeating-linear-gradient(90deg, #7f8986 0 1.5px, transparent 1.5px 60px) 0 0 / auto 7px repeat-x,
+    repeating-linear-gradient(90deg, #c3cbc8 0 1px, transparent 1px 6px) 0 100% / auto 4px repeat-x;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
+.ruler.anim { transition: background-position .45s cubic-bezier(.3,1.35,.5,1); }
+.step b::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--emerald); }
+.go { height: 44px; width: 72px; padding: 0; border-radius: 999px; border: 0; background: var(--ink); color: #fff; font: 600 14px "Noto Sans SC", sans-serif; }
+.go.done { background: var(--emerald); }
+
+/* 热量柱 */
+.cal-foot { display: flex; gap: 18px; margin-top: 14px; font-size: 12px; font-weight: 600; color: var(--sub); }
+.cal-foot i { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 6px; vertical-align: 1px; }
+.cal-foot b { font: 600 13px var(--num); color: var(--ink); }
+
+/* 三个小环 */
+.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mc { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.mc .ring { position: relative; width: 84px; height: 84px; }
+.mc .ring .c { position: absolute; inset: 0; display: grid; place-items: center; }
+.mc .c b { font: 600 22px var(--num); letter-spacing: -.02em; }
+.mc .n { margin-top: 10px; font-size: 13px; font-weight: 700; }
+.mc .g { font: 500 12px var(--num); color: var(--faint); margin-top: 2px; }
+.arcfill { position: absolute; border-radius: 50%; pointer-events: none; }
+.caps { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+/* 打卡格 */
+.streak-top { display: flex; align-items: baseline; gap: 6px; }
+.streak-top b { font: 600 44px var(--num); letter-spacing: -.04em; line-height: 1; }
+.streak-top span { font-size: 14px; font-weight: 600; color: var(--sub); }
+.streak-top em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 600; color: var(--faint); }
+.streak-top em b { font: 600 14px var(--num); color: var(--ink); }
+.grid30 { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; margin-top: 18px; }
+.cell { aspect-ratio: 1; border-radius: 8px; background: #edf1ef; animation: cellIn .5s cubic-bezier(.3,1.5,.5,1) both; }
+.cell.ok { background: linear-gradient(160deg, #34d399, #059669); }
+.cell.over { background: #fbcfca; }
+.cell.today { background: #fff; box-shadow: inset 0 0 0 2px var(--emerald); }
+@keyframes cellIn { from { transform: scale(.3); opacity: 0; } }
+.legend { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; font-weight: 600; color: var(--sub); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+/* 本周小结（同首页 AI 卡） */
+.coach { position: relative; border-radius: 28px; padding: 22px; background: #fff; overflow: hidden; isolation: isolate; }
+.coach::before { content: ""; position: absolute; inset: -40%; z-index: -2; background: conic-gradient(from 0deg, transparent 0 50%, rgba(16,185,129,.75) 68%, rgba(110,224,200,.55) 78%, transparent 92%); animation: spin 7s linear infinite; }
+.coach::after { content: ""; position: absolute; inset: 1.5px; border-radius: 26.5px; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, #effaf5 0%, #ffffff 55%); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.coach .label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); }
+.coach .label b { color: var(--ink); font-weight: 600; }
+.coach .dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: breathe 2.4s ease-out infinite; }
+@keyframes breathe { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); } 100% { box-shadow: 0 0 0 9px rgba(52,211,153,0); } }
+.coach .head { font-size: 21px; font-weight: 700; margin-top: 14px; line-height: 1.35; }
+.coach .why { font-size: 14px; color: var(--sub); margin-top: 8px; line-height: 1.7; }
+.coach .why b { font-family: var(--num); font-weight: 600; color: var(--ink); }
+
+/* 导航（同首页） */
+.nav { position: absolute; left: 0; right: 0; bottom: 0; height: 88px; display: grid; grid-template-columns: repeat(5, 1fr); padding-top: 10px; z-index: 20; background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 -1px 0 rgba(0,0,0,.06); }
+.nav span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #7a8481; }
+.nav span.on { color: var(--ink); } .nav svg { width: 24px; height: 24px; }
+.nav .plus { justify-self: center; width: 60px; height: 60px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; margin-top: -22px; box-shadow: 0 10px 24px rgba(16,20,19,.28); }
+.toast { position: absolute; left: 50%; top: 52px; transform: translate(-50%, -110px); z-index: 50; padding: 10px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+.toast.show { transform: translate(-50%, 0); }
+/* ---- 精细动效 ---- */
+.roll { display: inline-flex; height: 1em; line-height: 1; }
+.roll .dg { display: inline-block; height: 1em; overflow: hidden; }
+.roll .strip { display: flex; flex-direction: column; transition: transform .65s cubic-bezier(.25,1.2,.4,1); }
+.roll .strip i { font-style: normal; display: block; height: 1em; line-height: 1; }
+.roll .strip i { width: max-content; }
+.roll, .roll * { font-variant-numeric: proportional-nums !important; }
+.roll .dg { transition: width .45s cubic-bezier(.25,1.2,.4,1); }
+.rv { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .75s cubic-bezier(.2,.9,.3,1); }
+.rv.in { opacity: 1; transform: none; }
+.grid30 .cell { animation-play-state: paused; }
+.in .grid30 .cell { animation-play-state: running; }
+.cell.today { animation: cellIn .5s cubic-bezier(.3,1.5,.5,1) both, todayPulse 2.4s ease-in-out 1.2s infinite; }
+@keyframes todayPulse { 50% { box-shadow: inset 0 0 0 2px var(--emerald), 0 0 0 5px rgba(16,185,129,.16); } }
+.topbar { position: absolute; left: 0; right: 0; top: 0; height: 86px; z-index: 18; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12px; font-size: 16px; font-weight: 700; background: rgba(243,245,244,.78); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 1px 0 rgba(0,0,0,.06); opacity: 0; transform: translateY(-8px); transition: opacity .25s, transform .35s cubic-bezier(.3,1.2,.5,1); pointer-events: none; }
+.topbar.on { opacity: 1; transform: none; }
+.th h1 { transform-origin: 0 60%; will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) { .roll .strip, .rv { transition: none; } .rv { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .coach::before, .coach .dot, .halo, .cell { animation: none; } }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-h">
+    <h1>健食<small>趋势页 · 跟首页同一套</small></h1>
+    <p>保留原来的三样：体重曲线、在页面里直接记体重、热量走势。新增：7 / 30 天切换、手指按住曲线看某一天、点柱子看数、三大营养素平均、30 天打卡格、本周小结。</p>
+    <h2>可以点</h2>
+    <ul>
+      <li><b>右上角 7 天 / 30 天</b>　切换范围，图会重新长出来</li>
+      <li><b>按住体重曲线左右滑</b>　大数字跟着变成那一天，松手回到今天</li>
+      <li><b>− / +</b>　按一下 0.1 kg，按住会越走越快；点「记下」更新曲线</li>
+      <li><b>点热量柱子</b>　看那天吃了多少，再点一次取消</li>
+      <li><b>点打卡格</b>　看那天的热量</li>
+    </ul>
+  </div>
+  <div id="main"></div>
+  <div id="second" class="second"></div>
+</div>
+
+<template id="app">
+  <div class="app">
+    <div class="scroll"><div class="stack">
+      <div class="th"><h1>趋势</h1>
+        <div class="seg" data-seg data-r="7"><i class="seg-pill"></i><button data-press data-range="7" class="on">7 天</button><button data-press data-range="30">30 天</button></div>
+      </div>
+
+      <section>
+        <div class="wt-h"><span class="lab" data-wlab>体重 · 今天</span><span class="chip" data-wchip></span></div>
+        <div class="wt-big"><b data-wbig>66.4</b><em>kg</em></div>
+        <div class="chart" data-wchart></div>
+        <div class="wlog">
+          <div class="t">今天的体重<small data-wnote>早上空腹称最准</small></div>
+          <div class="step"><span class="acc" data-acc></span><button data-step="-1" aria-label="减 0.1">−</button><b data-draft><span class="v" data-dv>66.4</span><i class="ruler" data-ruler></i></b><button data-step="1" aria-label="加 0.1">+</button></div>
+          <button class="go" data-press data-save>记下</button>
+        </div>
+      </section>
+
+      <section class="card rv"><h3>热量<span data-cavg></span></h3>
+        <div class="chart" data-cchart></div>
+        <div class="cal-foot"><span><i style="background:#10b981"></i>达标 <b data-okn></b> 天</span><span><i style="background:#f0505a"></i>超了 <b data-overn></b> 天</span><span style="margin-left:auto"><i style="width:14px;height:0;border-top:1.5px dashed #8a938f;border-radius:0;vertical-align:3px"></i>目标 <b>2000</b></span></div>
+      </section>
+
+      <section class="card rv"><h3>三大营养素<span data-mlab>近 7 天 · 平均每天</span></h3><div class="macros" data-macros></div></section>
+
+      <section class="card rv"><h3>打卡<span>近 30 天</span></h3>
+        <div class="streak-top"><b data-streak>0</b><span>天连续</span><em>最长 <b>21</b> 天</em></div>
+        <div class="grid30" data-grid></div>
+        <div class="legend"><span><i style="background:#10b981"></i>达标</span><span><i style="background:#fbcfca"></i>超了</span><span><i style="background:#edf1ef"></i>没记</span></div>
+      </section>
+
+      <section class="coach rv">
+        <div class="label"><span class="dot"></span><b>AI 教练</b>· 本周小结</div>
+        <div class="head" data-shead></div>
+        <div class="why" data-swhy></div>
+      </section>
+    </div></div>
+
+    <div class="topbar" data-topbar>趋势</div>
+    <nav class="nav">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>今天</span>
+      <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19V11M10 19V5M16 19v-6M21 19H3"/></svg>趋势</span>
+      <div class="plus" data-press aria-label="记一笔"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg>食物库</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" stroke-linecap="round"/></svg>我的</span>
+    </nav>
+    <div class="toast" data-toast></div>
+  </div>
+</template>
+
+<script src="shared.js"></script>
+<script>
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DAYS = 30, GOAL = 2000;
+const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+// 今天 = 11 月 5 日（星期三，和首页日期条一致）
+const off = (i) => DAYS - 1 - i;
+const dateOf = (i) => { const o = off(i); return o < 5 ? `11/${5 - o}` : `10/${36 - o}`; };
+const weekOf = (i) => WEEK[((3 - off(i)) % 7 + 7) % 7];
+
+// 演示数据（固定种子，每次一样）
+function rng(seed) { return () => (seed = seed * 16807 % 2147483647) / 2147483647; }
+const r = rng(11);
+const CAL = Array.from({ length: DAYS }, (_, i) => Math.round(1760 + (r() - .5) * 380 + (r() < .14 ? 460 : 0)));
+CAL[DAYS - 1] = 1175;               // 今天还在进行
+const LOGGED = CAL.map((_, i) => i >= DAYS - 12 || r() > .22);
+LOGGED[DAYS - 13] = false;          // 连续 12 天从这里断开
+const W0 = Array.from({ length: DAYS }, (_, i) => (i === DAYS - 1 || r() < .72) ? +(67.6 - 1.2 * i / (DAYS - 1) + (r() - .5) * .34).toFixed(1) : null);
+W0[DAYS - 1] = 66.4; W0[0] = 67.6;
+const MAC = { 7: [118, 186, 58], 30: [112, 191, 61] };
+const MACROS = [
+  { name: '蛋白质', max: 150, a: '#ff8a7a', b: '#f0505a', ink: '#c9323d', track: 'rgba(240,80,90,.16)', glow: 'rgba(240,80,90,.45)' },
+  { name: '碳水', max: 200, a: '#ffd36a', b: '#f5a524', ink: '#b26f05', track: 'rgba(245,165,36,.18)', glow: 'rgba(245,165,36,.45)' },
+  { name: '脂肪', max: 65, a: '#6ee0c8', b: '#16a394', ink: '#0d7f73', track: 'rgba(22,163,148,.16)', glow: 'rgba(22,163,148,.45)' },
+];
+
+// 数字像里程表一样滚：每一位一条 0–9 的竖条
+function roll(el, text) {
+  const chars = [...text], sig = chars.map((c) => (/\d/.test(c) ? 'd' : c)).join('');
+  if (el._sig !== sig) {
+    el._sig = sig; el.classList.add('roll');
+    el.innerHTML = chars.map((c) => /\d/.test(c) ? `<span class="dg"><span class="strip">${[...'0123456789'].map((d) => `<i>${d}</i>`).join('')}</span></span>` : `<span>${c}</span>`).join('');
+  }
+  const strips = el.querySelectorAll('.strip'); let k = 0;
+  chars.forEach((c) => {
+    if (!/\d/.test(c)) return;
+    const st = strips[k++], w = st.children[+c].offsetWidth;
+    st.style.transform = `translateY(${-c}em)`;
+    st.parentElement.style.width = w ? w + 'px' : '';   // 每一位按自己的宽度，"1" 不留空
+  });
+}
+// 进入视野才播放
+function whenIn(el, fn) { if (!el || el.classList.contains('in')) return fn(); const prev = el._onIn; el._onIn = () => { prev && prev(); fn(); }; }
+
+function smooth(P, t = .18) {
+  if (P.length < 2) return '';
+  let d = `M${P[0][0]},${P[0][1]}`;
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+    d += ` C${p1[0] + (p2[0] - p0[0]) * t},${p1[1] + (p2[1] - p0[1]) * t} ${p2[0] - (p3[0] - p1[0]) * t},${p2[1] - (p3[1] - p1[1]) * t} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
+function mount(host, { label, range: startRange = 7, scrubAt = null } = {}) {
+  const { phone, spring, pressable, pop } = GYM;
+  const p = phone({ label });
+  host.appendChild(p.wrap);
+  p.content.appendChild(document.getElementById('app').content.cloneNode(true));
+  const $ = (q) => p.content.querySelector(q);
+  pressable(p.content);
+  const uid = Math.random().toString(36).slice(2, 7);
+  const W = W0.slice();
+  let range = startRange;
+  const toast = (msg) => { const t = $('[data-toast]'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1700); };
+
+  /* ---------- 体重 ---------- */
+  const wbig = $('[data-wbig]'), wlab = $('[data-wlab]');
+  const wSpring = (v) => roll(wbig, v.toFixed(1));
+  wSpring(W[DAYS - 1]);
+  const CW = 368, WH = 168, WT = 14, WB = 28;
+  let wGeo = null;
+  function wPts() { const out = []; for (let i = DAYS - range; i < DAYS; i++) if (W[i] != null) out.push({ i, v: W[i] }); return out; }
+  function chip() {
+    const pts = wPts(), d = +(pts[pts.length - 1].v - pts[0].v).toFixed(1);
+    const c = $('[data-wchip]'); c.classList.toggle('up', d > 0);
+    c.innerHTML = `${d > 0 ? '↑' : d < 0 ? '↓' : ''} ${Math.abs(d).toFixed(1)} kg <small>${range} 天</small>`;
+  }
+  function drawWeight(drawIn) {
+    const pts = wPts(), vs = pts.map((q) => q.v);
+    const lo = Math.min(...vs) - .3, hi = Math.max(...vs) + .3;
+    const X = (i) => 10 + (i - (DAYS - range)) / (range - 1) * (CW - 20);
+    const Y = (v) => WT + (hi - v) / (hi - lo) * (WH - WT - WB);
+    const P = pts.map((q) => [X(q.i), Y(q.v)]);
+    const line = smooth(P), last = P[P.length - 1];
+    const area = `${line} L${last[0]},${WH - WB} L${P[0][0]},${WH - WB} Z`;
+    const labels = range === 7
+      ? Array.from({ length: 7 }, (_, k) => DAYS - 7 + k).map((i) => `<text x="${X(i)}" y="${WH - 6}" text-anchor="middle" font-size="11" font-weight="${i === DAYS - 1 ? 700 : 600}" fill="${i === DAYS - 1 ? '#121615' : '#8a938f'}">${i === DAYS - 1 ? '今天' : weekOf(i)}</text>`).join('')
+      : [0, 7, 14, 21, 29].map((k) => `<text x="${X(k)}" y="${WH - 6}" text-anchor="${k === 0 ? 'start' : k === 29 ? 'end' : 'middle'}" font-size="11" font-weight="600" fill="#8a938f">${k === 29 ? '今天' : dateOf(k)}</text>`).join('');
+    const grid = [0, .5, 1].map((f) => `<line x1="0" x2="${CW}" y1="${WT + f * (WH - WT - WB)}" y2="${WT + f * (WH - WT - WB)}" stroke="#e3e8e6" stroke-dasharray="2 5"/>`).join('');
+    $('[data-wchart]').innerHTML = `<svg viewBox="0 0 ${CW} ${WH}" height="${WH}">
+      <defs><linearGradient id="wa-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10b981" stop-opacity=".16"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></linearGradient>
+        <linearGradient id="wl-${uid}" gradientUnits="userSpaceOnUse" x1="0" x2="${CW}" y1="0" y2="0"><stop offset="0" stop-color="#121615" stop-opacity=".25"/><stop offset=".2" stop-color="#121615"/></linearGradient>
+        <clipPath id="wc-${uid}"><rect data-clip x="-10" y="-30" height="${WH + 60}" width="${CW + 20}"/></clipPath></defs>
+      ${grid}
+      <text x="${CW}" y="${WT - 5}" text-anchor="end" font-size="10" font-weight="600" fill="#9aa39f">${hi.toFixed(1)}</text>
+      <text x="${CW}" y="${WH - WB - 5}" text-anchor="end" font-size="10" font-weight="600" fill="#9aa39f">${lo.toFixed(1)}</text>
+      <path data-ghost d="${line}" fill="none" stroke="#cfd6d3" stroke-width="2.6" stroke-linecap="round" style="opacity:0;transition:opacity .2s"/>
+      <path data-area d="${area}" fill="url(#wa-${uid})" clip-path="url(#wc-${uid})"/>
+      <path data-line d="${line}" fill="none" stroke="url(#wl-${uid})" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#wc-${uid})"/>
+      ${range === 7 ? P.slice(0, -1).map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="#f3f5f4" stroke="#121615" stroke-width="2"/>`).join('') : ''}
+      <circle class="halo" cx="${last[0]}" cy="${last[1]}" r="5" fill="#10b981"/>
+      <circle data-lastdot cx="${last[0]}" cy="${last[1]}" r="6" fill="#10b981" stroke="#fff" stroke-width="2.5"/>
+      ${labels}
+      <g data-cur style="opacity:0;transition:opacity .15s"><line data-cl y1="${WT - 6}" y2="${WH - WB}" stroke="#121615" stroke-width="1.5" stroke-dasharray="3 3"/><circle data-cd r="7" fill="#121615" stroke="#fff" stroke-width="3"/></g>
+    </svg><div class="bubble" data-wb></div>`;
+    wGeo = { pts, X, Y };
+    if (drawIn && !REDUCED) {
+      const ln = $('[data-line]'), L = ln.getTotalLength();
+      ln.animate([{ strokeDasharray: `${L} ${L}`, strokeDashoffset: L }, { strokeDasharray: `${L} ${L}`, strokeDashoffset: 0 }], { duration: 900, easing: 'cubic-bezier(.6,0,.2,1)' });
+      $('[data-area]').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: 500, fill: 'backwards' });
+      const ld = $('[data-lastdot]'); ld.style.transformBox = 'fill-box'; ld.style.transformOrigin = 'center';
+      ld.animate([{ transform: 'scale(0)' }, { transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 500, delay: 850, fill: 'backwards', easing: 'cubic-bezier(.3,1.5,.5,1)' });
+    }
+    chip();
+  }
+  // 按住曲线左右滑
+  function scrub(clientX) {
+    const box = $('[data-wchart]').getBoundingClientRect(), x = (clientX - box.left) / box.width * CW;
+    const { pts, X, Y } = wGeo;
+    let best = pts[0]; pts.forEach((q) => { if (Math.abs(X(q.i) - x) < Math.abs(X(best.i) - x)) best = q; });
+    showAt(best);
+  }
+  let curI = null;
+  function showAt(q) {
+    const { X, Y } = wGeo, cx = X(q.i), cy = Y(q.v);
+    const cur = $('[data-cur]'); cur.style.opacity = 1;
+    $('[data-cl]').setAttribute('x1', cx); $('[data-cl]').setAttribute('x2', cx);
+    $('[data-cd]').setAttribute('cx', cx); $('[data-cd]').setAttribute('cy', cy);
+    const clip = $('[data-clip]'); clip.style.transition = 'none'; clip.setAttribute('width', cx + 10); $('[data-ghost]').style.opacity = 1;
+    const b = $('[data-wb]'); b.textContent = `${dateOf(q.i)} 周${weekOf(q.i)}`; b.style.left = Math.max(40, Math.min(CW - 40, cx)) / CW * 100 + '%'; b.style.top = '-22px'; b.classList.add('on');
+
+    if (curI !== q.i && navigator.userActivation?.hasBeenActive && navigator.vibrate) navigator.vibrate(4);
+    curI = q.i;
+    wSpring(q.v);
+    wlab.textContent = q.i === DAYS - 1 ? '体重 · 今天' : `体重 · ${dateOf(q.i)}`; wlab.classList.add('scrub');
+  }
+  function endScrub() {
+    if (curI === null) return;
+    curI = null; $('[data-cur]').style.opacity = 0; $('[data-wb]').classList.remove('on');
+    // 松手：深色从手指处一路铺回终点
+    const clip = $('[data-clip]'), from = +clip.getAttribute('width'), t0 = performance.now();
+    const back = (t) => { const k = Math.min(1, (t - t0) / 420), e = 1 - Math.pow(1 - k, 3); clip.setAttribute('width', from + (CW + 20 - from) * e); if (k < 1) requestAnimationFrame(back); else $('[data-ghost]').style.opacity = 0; };
+    requestAnimationFrame(back);
+    wSpring(W[DAYS - 1]); wlab.textContent = '体重 · 今天'; wlab.classList.remove('scrub');
+  }
+  const wc = $('[data-wchart]');
+  wc.addEventListener('pointerdown', (e) => { wc.setPointerCapture(e.pointerId); scrub(e.clientX); });
+  wc.addEventListener('pointermove', (e) => { if (wc.hasPointerCapture(e.pointerId)) scrub(e.clientX); });
+  wc.addEventListener('pointerup', endScrub); wc.addEventListener('pointercancel', endScrub);
+
+  // 原地记体重：− / + 按住加速
+  let draft = W[DAYS - 1];
+  const stepEl = $('.step'), dvEl = $('[data-dv]'), rulerEl = $('[data-ruler]'), accEl = $('[data-acc]');
+  const buzz = (ms) => { if (navigator.userActivation?.hasBeenActive && navigator.vibrate) navigator.vibrate(ms); };
+  const setDraft = (v) => {
+    draft = Math.round(Math.max(30, Math.min(200, v)) * 10) / 10;
+    roll(dvEl, draft.toFixed(1));
+    const x = 30 - draft * 60; rulerEl.style.backgroundPosition = `${x}px 0, ${x}px 100%`;
+    $('[data-save]').classList.remove('done'); $('[data-save]').textContent = '记下';
+  };
+  setDraft(draft); requestAnimationFrame(() => rulerEl.classList.add('anim'));
+  // 每按一步：按钮一圈绿波 + 飘出 ±0.1
+  function stepFx(btn, dir, holding) {
+    buzz(holding ? 5 : 12);
+    if (REDUCED) return;
+    const rip = document.createElement('span'); rip.className = 'rip'; btn.appendChild(rip);
+    rip.animate([{ transform: 'scale(.7)', opacity: .7 }, { transform: 'scale(1.9)', opacity: 0 }], { duration: 520, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => rip.remove();
+    if (holding) return;
+    const f = document.createElement('span'); f.className = 'fly'; f.textContent = `${dir > 0 ? '+' : '−'}0.1`;
+    f.style.left = btn.offsetLeft + btn.offsetWidth / 2 + 'px'; stepEl.appendChild(f);
+    f.animate([{ transform: 'translate(-50%, 0) scale(.6)', opacity: 0 }, { transform: 'translate(-50%, -16px) scale(1.05)', opacity: 1, offset: .3 }, { transform: 'translate(-50%, -32px) scale(1)', opacity: 0 }], { duration: 720, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => f.remove();
+  }
+  p.content.querySelectorAll('[data-step]').forEach((btn) => {
+    let tm = 0, start = 0;
+    const dir = +btn.dataset.step, d = dir / 10;
+    const showAcc = () => { const t = +(draft - start).toFixed(1); accEl.textContent = `${t > 0 ? '+' : t < 0 ? '−' : ''}${Math.abs(t).toFixed(1)} kg`; accEl.classList.add('on'); };
+    btn.addEventListener('pointerdown', (e) => {
+      try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+      start = draft; btn.classList.add('down');
+      setDraft(draft + d); stepFx(btn, dir, false);
+      let n = 0;
+      const rep = () => {
+        btn.classList.add('hold');
+        setDraft(draft + d * (n > 14 ? 2 : 1)); stepFx(btn, dir, true); showAcc();
+        n++; tm = setTimeout(rep, n > 10 ? 90 : n > 4 ? 110 : 160);
+      };
+      tm = setTimeout(rep, 400);
+    });
+    const end = () => { clearTimeout(tm); btn.classList.remove('down', 'hold'); setTimeout(() => accEl.classList.remove('on'), 500); };
+    ['pointerup', 'pointercancel'].forEach((ev) => btn.addEventListener(ev, end));
+  });
+  $('[data-save]').addEventListener('click', () => {
+    W[DAYS - 1] = draft; drawWeight(false); wSpring(draft);
+    const dot = $('[data-lastdot]'); dot.style.transformBox = 'fill-box'; dot.style.transformOrigin = 'center';
+    if (!REDUCED) dot.animate([{ transform: 'translateY(-40px) scale(.6)', opacity: 0 }, { transform: 'translateY(0) scale(1.3)', opacity: 1, offset: .6 }, { transform: 'none' }], { duration: 650, easing: 'cubic-bezier(.3,1.2,.5,1)' });
+    const s = $('[data-save]'); s.classList.add('done'); s.textContent = '已记'; pop(s);
+    $('[data-wnote]').textContent = '已记，可再改';
+    toast(`体重记下了 · ${draft.toFixed(1)} kg`);
+  });
+
+  /* ---------- 热量柱 ---------- */
+  const CH = 186, CT = 30, CB = 26;
+  let sel = null;
+  const calT = spring(0, (t) => layoutBars(t), { stiffness: 120, damping: 14 });
+  function drawCal() {
+    const n = range, gap = n === 7 ? 14 : 3.4, bw = (CW - gap * (n - 1)) / n;
+    const max = Math.max(2600, ...CAL.slice(DAYS - n));
+    const Y = (v) => CT + (1 - v / max) * (CH - CT - CB);
+    const idx = Array.from({ length: n }, (_, k) => DAYS - n + k);
+    const rx = Math.min(8, bw / 2);
+    const bars = idx.map((i, k) => {
+      const today = i === DAYS - 1, over = CAL[i] > GOAL, x = k * (bw + gap);
+      const fill = today ? `url(#ct-${uid})` : over ? `url(#co-${uid})` : `url(#cg-${uid})`;
+      return `<rect data-bar="${i}" data-k="${k}" x="${x}" width="${bw}" rx="${rx}" fill="${fill}" ${today ? `stroke="#10b981" stroke-width="1.6" stroke-dasharray="4 3"` : ''} style="transition:opacity .25s, transform .4s cubic-bezier(.3,1.5,.5,1), filter .25s"/>`;
+    }).join('');
+    const labels = n === 7
+      ? idx.map((i, k) => `<text x="${k * (bw + gap) + bw / 2}" y="${CH - 6}" text-anchor="middle" font-size="11" font-weight="${i === DAYS - 1 ? 700 : 600}" fill="${i === DAYS - 1 ? '#121615' : '#8a938f'}">${i === DAYS - 1 ? '今天' : weekOf(i)}</text>`).join('')
+      : [0, 7, 14, 21, 29].map((k) => `<text x="${k * (bw + gap) + bw / 2}" y="${CH - 6}" text-anchor="${k === 0 ? 'start' : k === 29 ? 'end' : 'middle'}" font-size="11" font-weight="600" fill="#8a938f">${k === 29 ? '今天' : dateOf(k)}</text>`).join('');
+    $('[data-cchart]').innerHTML = `<svg viewBox="0 0 ${CW} ${CH}" height="${CH}">
+      <defs>
+        <linearGradient id="cg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10b981"/><stop offset="1" stop-color="#6ee7b7"/></linearGradient>
+        <linearGradient id="co-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0505a"/><stop offset="1" stop-color="#ffa598"/></linearGradient>
+        <linearGradient id="ct-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10b981" stop-opacity=".28"/><stop offset="1" stop-color="#10b981" stop-opacity=".08"/></linearGradient>
+      </defs>
+      <line data-goal x1="0" x2="${CW}" y1="${Y(GOAL)}" y2="${Y(GOAL)}" stroke="#121615" stroke-opacity=".35" stroke-width="1.2" stroke-dasharray="4 4"/>
+      ${bars}${labels}
+    </svg><div class="bubble" data-cb></div>`;
+    drawCal.geo = { Y, bw, gap, idx };
+    const done = idx.filter((i) => i !== DAYS - 1);
+    const avg = Math.round(done.reduce((a, i) => a + CAL[i], 0) / done.length);
+    $('[data-cavg]').innerHTML = `平均 <b data-avgn>0</b> kcal / 天`;
+    const avgEl = $('[data-avgn]');
+    $('[data-okn]').textContent = done.filter((i) => CAL[i] <= GOAL).length;
+    $('[data-overn]').textContent = done.filter((i) => CAL[i] > GOAL).length;
+    sel = null;
+    const card = $('[data-cchart]').closest('.rv');
+    if (REDUCED) { layoutBars(1); avgEl.textContent = avg.toLocaleString(); }
+    else {
+      calT.jump(0);
+      whenIn(card, () => {
+        setTimeout(() => calT(1), 120);
+        const t0 = performance.now(), tick = (t) => { const k = Math.min(1, (t - t0) / 900), e = 1 - Math.pow(1 - k, 4); avgEl.textContent = Math.round(avg * e).toLocaleString(); if (k < 1) requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+        const gl = $('[data-goal]'); gl.style.transformBox = 'fill-box'; gl.style.transformOrigin = 'left';
+        gl.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 800, easing: 'cubic-bezier(.6,0,.2,1)' });
+      });
+    }
+  }
+  function layoutBars(t) {
+    const g = drawCal.geo; if (!g) return;
+    const n = g.idx.length;
+    p.content.querySelectorAll('[data-bar]').forEach((el) => {
+      const i = +el.dataset.bar, k = +el.dataset.k;
+      const tk = Math.max(0, Math.min(1.25, (t - k / n * .45) / .55));
+      const full = (CH - CB) - g.Y(CAL[i]), h = Math.max(0, full * tk);
+      el.setAttribute('height', h); el.setAttribute('y', CH - CB - h);
+    });
+  }
+  $('[data-cchart]').addEventListener('click', (e) => {
+    const bar = e.target.closest('[data-bar]'); const bub = $('[data-cb]');
+    const all = p.content.querySelectorAll('[data-bar]');
+    if (!bar || sel === bar.dataset.bar) { sel = null; all.forEach((b) => { b.style.opacity = 1; b.style.transform = ''; b.style.filter = ''; }); bub.classList.remove('on'); return; }
+    sel = bar.dataset.bar; const i = +sel, g = drawCal.geo, k = +bar.dataset.k;
+    all.forEach((b) => { b.style.opacity = b === bar ? 1 : .3; b.style.transform = b === bar ? 'translateY(-4px)' : ''; b.style.filter = b === bar ? 'drop-shadow(0 6px 6px rgba(16,20,19,.18))' : ''; });
+    bub.classList.remove('on'); void bub.offsetWidth;
+    const cx = k * (g.bw + g.gap) + g.bw / 2;
+    bub.innerHTML = `${i === DAYS - 1 ? '今天' : dateOf(i)} · ${CAL[i].toLocaleString()} kcal`;
+    bub.style.left = Math.max(60, Math.min(CW - 60, cx)) / CW * 100 + '%';
+    bub.style.top = Math.max(-8, g.Y(CAL[i]) - 34) + 'px';
+    bub.classList.add('on');
+    if (navigator.vibrate) navigator.vibrate(6);
+  });
+
+  /* ---------- 三个小环 ---------- */
+  function makeRing(hostEl, { size, r: rr, w, track, from, to, shadow }) {
+    const o = size / 2;
+    hostEl.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${size} ${size}" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible"><circle cx="${o}" cy="${o}" r="${rr}" fill="none" stroke="${track}" stroke-width="${w}"/></svg>
+      <div class="arcfill" style="inset:${o - rr - w / 2}px;-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - ${w}px),#000 calc(100% - ${w - .6}px));mask:radial-gradient(farthest-side,transparent calc(100% - ${w}px),#000 calc(100% - ${w - .6}px))"></div>
+      <svg class="caps" viewBox="0 0 ${size} ${size}"><circle data-c0 cx="${o}" cy="${o - rr}" r="${w / 2}"/><circle data-c1 r="${w / 2}" style="filter:drop-shadow(${shadow})"/></svg>`);
+    const fill = hostEl.querySelector('.arcfill'), c0 = hostEl.querySelector('[data-c0]'), c1 = hostEl.querySelector('[data-c1]');
+    return (f) => {
+      const g = Math.max(0, Math.min(1, f)), deg = g * 360;
+      fill.style.background = g >= 1 ? `conic-gradient(${from}, ${to})` : `conic-gradient(${from} 0deg, ${to} ${deg}deg, transparent ${deg}deg)`;
+      [fill, c0, c1].forEach((el) => (el.style.opacity = g < .005 ? 0 : 1));
+      c0.setAttribute('fill', from);
+      const ang = (deg - 90) * Math.PI / 180;
+      c1.setAttribute('cx', o + rr * Math.cos(ang)); c1.setAttribute('cy', o + rr * Math.sin(ang)); c1.setAttribute('fill', to);
+    };
+  }
+  $('[data-macros]').innerHTML = MACROS.map((m, k) => `<div class="mc" data-press><div class="ring" data-ring="${k}"><div class="c"><b data-mv="${k}"></b></div></div><div class="n" style="color:${m.ink}">${m.name}</div><div class="g">目标 ${m.max} g</div></div>`).join('');
+  const mS = MACROS.map((m, k) => {
+    const draw = makeRing($(`[data-ring="${k}"]`), { size: 84, r: 34, w: 10, track: m.track, from: m.a, to: m.b, shadow: `0 1px 2px ${m.glow}` });
+    const el = $(`[data-mv="${k}"]`);
+    return spring(0, (x) => { draw(x / m.max); el.textContent = Math.round(x); }, { stiffness: 120, damping: 16 });
+  });
+  function drawMacros() { whenIn($('[data-macros]').closest('.rv'), () => MAC[range].forEach((v, k) => setTimeout(() => mS[k](v), 200 + k * 140))); $('[data-mlab]').textContent = `近 ${range} 天 · 平均每天`; }
+
+  /* ---------- 打卡格 ---------- */
+  $('[data-grid]').innerHTML = CAL.map((c, i) => {
+    const cls = i === DAYS - 1 ? 'today' : !LOGGED[i] ? '' : c > GOAL ? 'over' : 'ok';
+    return `<div class="cell ${cls}" data-press data-cell="${i}" style="animation-delay:${(Math.floor(i / 10) + i % 10) * 34}ms"></div>`;
+  }).join('');
+  $('[data-grid]').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cell]'); if (!c) return; const i = +c.dataset.cell;
+    toast(i === DAYS - 1 ? `今天 · 已吃 ${CAL[i]} kcal` : !LOGGED[i] ? `${dateOf(i)} · 没记` : `${dateOf(i)} · ${CAL[i].toLocaleString()} kcal${CAL[i] > GOAL ? ' · 超了' : ''}`);
+  });
+
+  const streakEl = $('[data-streak]');
+  whenIn($('[data-grid]').closest('.rv'), () => { const t0 = performance.now(), tick = (t) => { const k = Math.min(1, (t - t0) / 800); streakEl.textContent = Math.round(12 * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(tick); }; REDUCED ? (streakEl.textContent = 12) : requestAnimationFrame(tick); });
+
+  /* ---------- 本周小结 ---------- */
+  (function summary() {
+    const days = Array.from({ length: 6 }, (_, k) => DAYS - 7 + k);
+    const avg = Math.round(days.reduce((a, i) => a + CAL[i], 0) / days.length);
+    const ws = [], wv = W.slice(DAYS - 7).filter((v) => v != null);
+    const dw = +(wv[wv.length - 1] - wv[0]).toFixed(1);
+    $('[data-shead]').textContent = avg <= GOAL ? '节奏刚好，继续保持' : '这周吃得偏多，下周收一收';
+    $('[data-swhy]').innerHTML = `这 7 天平均 <b>${avg.toLocaleString()}</b> kcal，比目标${avg <= GOAL ? '少' : '多'} <b>${Math.abs(GOAL - avg)}</b>；体重${dw <= 0 ? '降了' : '涨了'} <b>${Math.abs(dw)} kg</b>，每周 0.3–0.5 kg 正合适。蛋白质平均 <b>${MAC[7][0]} g</b>，再多一点就到 150 g 了。`;
+  })();
+
+  /* ---------- 切换 7 / 30 天 ---------- */
+  function setRange(n, first) {
+    range = n;
+    const seg = $('[data-seg]'), pill = seg.querySelector('.seg-pill');
+    if (!first && !REDUCED) { const w = pill.offsetWidth, a = n === 30 ? 0 : w, b = n === 30 ? w : 0;
+      pill.animate([{ transform: `translateX(${a}px)` }, { transform: `translateX(${(a + b) / 2}px) scaleX(1.28)`, offset: .45 }, { transform: `translateX(${b}px)` }], { duration: 480, easing: 'cubic-bezier(.3,1.15,.5,1)' }); }
+    seg.dataset.r = n;
+    seg.querySelectorAll('[data-range]').forEach((b) => b.classList.toggle('on', +b.dataset.range === n));
+    endScrub(); drawWeight(!first || true); drawCal(); drawMacros();
+  }
+  $('[data-seg]').addEventListener('click', (e) => { const b = e.target.closest('[data-range]'); if (b && +b.dataset.range !== range) setRange(+b.dataset.range); });
+  p.content.querySelector('.plus').addEventListener('click', () => toast('记一笔 · 在首页演示'));
+
+  const sc = $('.scroll'), topbar = $('[data-topbar]'), h1 = $('.th h1');
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); const f = e.target._onIn; e.target._onIn = null; f && f(); io.unobserve(e.target); } }), { root: sc, threshold: .2 });
+  p.content.querySelectorAll('.rv').forEach((el) => io.observe(el));
+  sc.addEventListener('scroll', () => {
+    const y = sc.scrollTop, k = Math.min(1, Math.max(0, y / 48));
+    topbar.classList.toggle('on', y > 44);
+    h1.style.opacity = 1 - k; h1.style.transform = `scale(${1 - k * .12}) translateY(${-k * 6}px)`;
+  }, { passive: true });
+
+  setRange(range, true);
+  if (scrubAt !== null) setTimeout(() => { const q = wGeo.pts.reduce((a, b) => Math.abs(b.i - scrubAt) < Math.abs(a.i - scrubAt) ? b : a); showAt(q); }, 1600);
+}
+
+mount(document.getElementById('main'), { label: '趋势 · 可以点' });
+mount(document.getElementById('second'), { label: '30 天 · 按住曲线看某一天', range: 30, scrubAt: 17 });
+</script>
+</body>
+</html>

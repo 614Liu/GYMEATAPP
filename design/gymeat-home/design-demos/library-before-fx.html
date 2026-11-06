@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 · 食物库</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="shared.css">
+<style>
+/*
+  食物库：沿用首页 / 趋势页那一套。原来的功能都在：拍照 / 相册识别营养表、手动填（三大营养素自动算热量）、
+  每 100 g 存库、推荐等级、编辑、删除、选克数记进某顿。全部在页面里原地展开，不弹窗。
+*/
+:root {
+  --bg: #f3f5f4; --card: #fff; --ink: #121615; --sub: #5a6360; --faint: #6e7774; --line: #eef1f0;
+  --emerald: #10b981; --emerald-deep: #0b7a55; --emerald-soft: #e7f7f0;
+  --coral: #f0505a; --coral-soft: #fde4e1;
+  --num: "Inter", "Noto Sans SC", sans-serif;
+  --pad: 22px; --gap: 28px; --in: 22px;
+}
+body { background: #dfe3e1; color: var(--ink); font-family: "Noto Sans SC", sans-serif; min-height: 100vh; }
+.board { max-width: 1260px; margin: 0 auto; padding: 44px 32px 80px; display: grid; grid-template-columns: 320px auto auto; gap: 44px; align-items: start; }
+.board-h { padding-top: 24px; }
+.board-h h1 { font-size: 40px; font-weight: 700; }
+.board-h h1 small { display: block; font-size: 17px; font-weight: 700; color: var(--sub); margin-top: 6px; }
+.board-h p { margin-top: 16px; font-size: 14.5px; line-height: 1.75; color: #3d4441; }
+.board-h h2 { font-size: 14px; font-weight: 700; margin-top: 20px; }
+.board-h ul { list-style: none; font-size: 13.5px; line-height: 1.95; color: #3d4441; margin-top: 4px; }
+.board-h ul b { color: var(--emerald-deep); }
+.second { margin-top: 110px; transform: scale(.86); transform-origin: top center; }
+
+.app { position: absolute; inset: 0; background: var(--bg); color: var(--ink); font-family: "Noto Sans SC", sans-serif; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; padding: 44px var(--pad) 128px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.stack > * + * { margin-top: var(--gap); }
+button { font-family: inherit; cursor: pointer; }
+
+/* 标题 */
+.th { display: flex; justify-content: space-between; align-items: baseline; padding-top: 6px; }
+.th h1 { font-size: 30px; font-weight: 700; letter-spacing: -.02em; transform-origin: 0 60%; }
+.th .cnt { font-size: 13px; font-weight: 600; color: var(--sub); }
+.th .cnt b { font: 600 17px var(--num); color: var(--ink); display: inline-flex; vertical-align: -2px; }
+
+/* 搜索 + 筛选 */
+.search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 8px 0 16px; border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px #e8edeb; transition: box-shadow .25s; }
+.search:focus-within { box-shadow: inset 0 0 0 2px var(--emerald), 0 0 0 4px rgba(16,185,129,.12); }
+.search svg { width: 18px; height: 18px; color: var(--faint); flex: none; }
+.search input { flex: 1; border: 0; outline: 0; background: none; font: 500 15px "Noto Sans SC", sans-serif; color: var(--ink); min-width: 0; }
+.search input::placeholder { color: #9aa39f; }
+.search .clr { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #eef2f0; color: var(--sub); font: 600 16px var(--num); display: grid; place-items: center; opacity: 0; transform: scale(.6); transition: opacity .2s, transform .3s cubic-bezier(.3,1.6,.5,1); pointer-events: none; }
+.search.has .clr { opacity: 1; transform: none; pointer-events: auto; }
+.chips { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 12px; background: #e7ecea; border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 2px rgba(16,20,19,.08); }
+.chips button { position: relative; z-index: 1; border: 0; background: none; font: 600 13px "Noto Sans SC", sans-serif; color: var(--sub); padding: 8px 0; border-radius: 999px; transition: color .3s; }
+.chips button.on { color: var(--ink); }
+.chip-pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(25% - 2px); border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(16,20,19,.12); }
+
+/* 新增卡 */
+.addc { background: #fff; border-radius: 28px; padding: var(--in); }
+.addh b { display: block; font-size: 17px; font-weight: 700; }
+.addh small { display: block; font-size: 12.5px; color: var(--faint); margin-top: 3px; }
+.ways { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin-top: 16px; }
+.ways button { height: 76px; border-radius: 20px; border: 0; background: #f3f6f5; color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; padding: 13px 14px; font-size: 13.5px; font-weight: 600; transition: background .25s, box-shadow .25s; }
+.ways button svg { width: 22px; height: 22px; }
+.ways button.main { background: var(--ink); color: #fff; }
+.ways button.cur { box-shadow: inset 0 0 0 2px var(--emerald); }
+.ways button.main.cur { box-shadow: 0 0 0 3px rgba(16,185,129,.35); }
+.inl { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .5s cubic-bezier(.3,1.1,.5,1); }
+.inl > div { overflow: hidden; min-height: 0; }
+.inl.open { grid-template-rows: 1fr; }
+
+/* 扫描营养表 */
+.scan { position: relative; margin-top: 16px; border-radius: 22px; background: #eef2f0; padding: 22px 24px; overflow: hidden; }
+.label { position: relative; background: #fff; border: 1.5px solid #1d2321; border-radius: 4px; padding: 10px 12px; font-size: 12px; transform: rotate(-1.5deg); box-shadow: 0 10px 24px -10px rgba(16,20,19,.25); }
+.label h5 { font-size: 13px; font-weight: 700; text-align: center; padding-bottom: 6px; border-bottom: 1.5px solid #1d2321; }
+.label .r { display: grid; grid-template-columns: 1.4fr 1fr .6fr; padding: 4px 4px; border-bottom: 1px solid #d5dbd8; transition: background .3s, color .3s; border-radius: 3px; }
+.label .r:last-child { border-bottom: 0; }
+.label .r span:nth-child(2), .label .r span:nth-child(3) { text-align: right; font-family: var(--num); }
+.label .r.hd { font-weight: 700; }
+.label .r.read { background: var(--emerald-soft); color: var(--emerald-deep); }
+.scan .line { position: absolute; left: 14px; right: 14px; height: 2px; top: 18px; background: #10b981; box-shadow: 0 0 14px 3px rgba(16,185,129,.45); border-radius: 2px; opacity: 0; }
+.scan.run .line { animation: sweep 1s cubic-bezier(.45,0,.55,1) 2 alternate; }
+@keyframes sweep { 0% { top: 18px; opacity: 1; } 100% { top: calc(100% - 20px); opacity: 1; } }
+.scan .cn { position: absolute; width: 22px; height: 22px; border: 3px solid var(--emerald); }
+.scan .cn.a { left: 10px; top: 10px; border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; }
+.scan .cn.b { right: 10px; top: 10px; border-left: 0; border-bottom: 0; border-radius: 0 8px 0 0; }
+.scan .cn.c { left: 10px; bottom: 10px; border-right: 0; border-top: 0; border-radius: 0 0 0 8px; }
+.scan .cn.d { right: 10px; bottom: 10px; border-left: 0; border-top: 0; border-radius: 0 0 8px 0; }
+.scan .st { margin-top: 14px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+
+/* 表单 */
+.form { margin-top: 16px; }
+.fin { display: flex; align-items: center; height: 50px; padding: 0 16px; border-radius: 16px; background: #f3f6f5; box-shadow: inset 0 0 0 1px transparent; transition: box-shadow .2s, background .2s; }
+.fin:focus-within { background: #fff; box-shadow: inset 0 0 0 2px var(--emerald); }
+.fin.bad { box-shadow: inset 0 0 0 2px var(--coral); background: #fff7f6; }
+.fin input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: 600 16px "Noto Sans SC", sans-serif; color: var(--ink); }
+.fin input::placeholder { color: #9aa39f; font-weight: 500; }
+.fk { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; }
+.fk .kc small { display: block; font-size: 12px; font-weight: 600; color: var(--faint); }
+.fk .kc b { font: 600 40px var(--num); letter-spacing: -.04em; line-height: 1; display: inline-flex; margin-top: 4px; }
+.fk .kc em { font-style: normal; font: 500 14px var(--num); color: var(--faint); margin-left: 4px; }
+.fk .amt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+.fk .amt .fin { height: 40px; width: 76px; padding: 0 10px; border-radius: 12px; }
+.fk .amt input { font: 600 15px var(--num); text-align: right; width: 100%; }
+.fm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.cell { border-radius: 16px; background: #f3f6f5; padding: 10px 12px; box-shadow: inset 0 0 0 1px transparent; transition: box-shadow .2s, background .2s; }
+.cell:focus-within { background: #fff; box-shadow: inset 0 0 0 2px var(--cc); }
+.cell small { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ci); }
+.cell small i { width: 7px; height: 7px; border-radius: 50%; background: var(--cc); }
+.cell div { display: flex; align-items: baseline; gap: 2px; margin-top: 4px; }
+.cell input { width: 100%; min-width: 0; border: 0; outline: 0; background: none; font: 600 22px var(--num); color: var(--ink); letter-spacing: -.02em; }
+.cell input::placeholder { color: #b5bdba; }
+.cell em { font-style: normal; font: 500 13px var(--num); color: var(--faint); }
+.cell.p { --cc: #f0505a; --ci: #c9323d; } .cell.c { --cc: #f5a524; --ci: #b26f05; } .cell.f { --cc: #16a394; --ci: #0d7f73; }
+.share { display: flex; gap: 3px; height: 8px; margin-top: 14px; border-radius: 999px; overflow: hidden; background: #edf1ef; }
+.share i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .5s cubic-bezier(.3,1.2,.5,1); }
+.share-l { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--faint); }
+.fbtn { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 18px; }
+.ghost, .go { height: 50px; border-radius: 999px; border: 0; font-size: 15px; font-weight: 600; }
+.ghost { background: #eef2f0; color: var(--ink); }
+.go { background: var(--ink); color: #fff; }
+.go.green { background: var(--emerald); }
+
+/* 列表 */
+.lh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; padding: 0 4px; }
+.lh b { font-size: 17px; font-weight: 700; } .lh span { font-size: 12px; font-weight: 600; color: var(--sub); }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.fw { position: relative; border-radius: 22px; overflow: hidden; }
+.acts { position: absolute; top: 0; right: 0; height: 74px; display: flex; gap: 6px; padding: 8px; }
+.acts button { width: 64px; border: 0; border-radius: 16px; font-size: 13px; font-weight: 600; background: #e3e8e6; color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.acts button svg { width: 18px; height: 18px; }
+.acts .del { background: var(--coral); color: #fff; }
+.food { position: relative; background: #fff; border-radius: 22px; touch-action: pan-y; }
+.food.snap { transition: transform .45s cubic-bezier(.3,1.25,.5,1); }
+.top { display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center; padding: 11px 14px 11px 11px; height: 74px; }
+.pic { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; background: #eef2f0; display: grid; place-items: center; font-size: 20px; font-weight: 700; color: #3d4441; }
+.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.info { min-width: 0; }
+.info b { display: block; font-size: 15.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info b mark { background: rgba(16,185,129,.18); color: var(--emerald-deep); border-radius: 4px; padding: 0 1px; }
+.info small { display: block; font-size: 12px; color: var(--faint); margin-top: 3px; }
+.info small span { font: 600 12.5px var(--num); color: var(--sub); }
+.mb { display: flex; gap: 2px; width: 92px; height: 5px; margin-top: 7px; }
+.mb i { display: block; height: 100%; border-radius: 3px; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.g-great { background: #dcf3e8; color: #0b7a55; } .g-good { background: #e1f3f0; color: #0d7f73; } .g-ok { background: #fbefd5; color: #a26206; } .g-avoid { background: #fde4e1; color: #c9323d; }
+.fw.fresh .food { animation: fresh 1.6s ease-out; }
+@keyframes fresh { 0%, 30% { box-shadow: 0 0 0 3px var(--emerald); } 100% { box-shadow: 0 0 0 3px rgba(16,185,129,0); } }
+.food.opened { box-shadow: 0 10px 30px -12px rgba(16,20,19,.22); }
+
+/* 展开：选克数 → 记进某顿 */
+.ex { padding: 4px 14px 16px; }
+.gch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.gch button { height: 36px; border-radius: 12px; border: 0; background: #f3f6f5; font: 600 13px var(--num); color: var(--sub); transition: background .2s, color .2s; }
+.gch button.on { background: var(--emerald-soft); color: var(--emerald-deep); box-shadow: inset 0 0 0 1.5px var(--emerald); }
+.exm { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+.res b { font: 600 30px var(--num); letter-spacing: -.03em; display: inline-flex; line-height: 1; }
+.res em { font-style: normal; font: 500 13px var(--num); color: var(--faint); margin-left: 3px; }
+.res small { display: block; font-size: 12px; color: var(--sub); margin-top: 4px; font-weight: 500; }
+.res small span { font: 600 12.5px var(--num); color: #c9323d; display: inline-flex; vertical-align: -1px; }
+.meals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+.meals button { height: 40px; border-radius: 14px; border: 0; background: #f3f6f5; font-size: 13px; font-weight: 600; color: var(--sub); transition: background .2s, color .2s; }
+.meals button.on { background: var(--ink); color: #fff; }
+.log { width: 100%; margin-top: 12px; height: 50px; border-radius: 999px; border: 0; background: var(--emerald); color: #fff; font-size: 15px; font-weight: 600; }
+
+/* − / + 小秤（同趋势页） */
+.step { position: relative; display: flex; align-items: center; background: #f1f4f3; border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 2px rgba(16,20,19,.08); }
+.step button { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 0; background: #fff; color: var(--ink); font: 600 20px var(--num); display: grid; place-items: center; box-shadow: 0 1px 3px rgba(16,20,19,.12); touch-action: none; transition: background .25s, color .25s, transform .4s cubic-bezier(.3,1.7,.5,1); }
+.step button.down { transform: scale(.8); transition: transform 70ms ease-out, background .25s, color .25s; }
+.step button.hold { background: var(--ink); color: #fff; }
+.step button.hold::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(16,185,129,.7); animation: holdRing .6s ease-out infinite; }
+@keyframes holdRing { from { transform: scale(.9); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.step .rip { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px #10b981; pointer-events: none; }
+.step .fly { position: absolute; top: -4px; font: 700 13px var(--num); color: var(--emerald-deep); pointer-events: none; white-space: nowrap; }
+.step b { position: relative; min-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.step b .v { font: 600 17px var(--num); display: inline-flex; }
+.step b .v em { font-style: normal; font-size: 12px; color: var(--faint); margin-left: 2px; align-self: flex-end; }
+.ruler { position: relative; width: 60px; height: 7px; background:
+    repeating-linear-gradient(90deg, #7f8986 0 1.5px, transparent 1.5px 60px) 0 0 / auto 7px repeat-x,
+    repeating-linear-gradient(90deg, #c3cbc8 0 1px, transparent 1px 6px) 0 100% / auto 4px repeat-x;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
+.ruler.anim { transition: background-position .45s cubic-bezier(.3,1.35,.5,1); }
+.step b::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--emerald); }
+
+/* 搜不到 */
+.empty { display: none; text-align: center; padding: 30px 20px; background: #fff; border-radius: 22px; }
+.empty.on { display: block; }
+.empty b { display: block; font-size: 15px; font-weight: 600; }
+.empty small { display: block; font-size: 12.5px; color: var(--faint); margin-top: 4px; }
+.empty button { margin-top: 14px; height: 42px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; }
+
+/* 数字滚轮 */
+.roll { display: inline-flex; height: 1em; line-height: 1; }
+.roll .dg { display: inline-block; height: 1em; overflow: hidden; }
+.roll .strip { display: flex; flex-direction: column; transition: transform .6s cubic-bezier(.25,1.2,.4,1); }
+.roll .strip i { font-style: normal; display: block; height: 1em; line-height: 1; }
+.roll .strip i { width: max-content; }
+.roll, .roll * { font-variant-numeric: proportional-nums !important; }
+.roll .dg { transition: width .45s cubic-bezier(.25,1.2,.4,1); }
+
+/* 抖一下：没填对 */
+.shake { animation: shake .42s cubic-bezier(.36,.07,.19,.97); }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+/* 顶栏 / 导航 / 提示 */
+.topbar { position: absolute; left: 0; right: 0; top: 0; height: 86px; z-index: 18; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12px; font-size: 16px; font-weight: 700; background: rgba(243,245,244,.78); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 1px 0 rgba(0,0,0,.06); opacity: 0; transform: translateY(-8px); transition: opacity .25s, transform .35s cubic-bezier(.3,1.2,.5,1); pointer-events: none; }
+.topbar.on { opacity: 1; transform: none; }
+.nav { position: absolute; left: 0; right: 0; bottom: 0; height: 88px; display: grid; grid-template-columns: repeat(5, 1fr); padding-top: 10px; z-index: 20; background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 -1px 0 rgba(0,0,0,.06); }
+.nav span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #7a8481; }
+.nav span.on { color: var(--ink); } .nav svg { width: 24px; height: 24px; }
+.nav .dot { position: absolute; top: -2px; left: 50%; margin-left: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 0 2px #fff; transform: scale(0); }
+.nav .plus { justify-self: center; width: 60px; height: 60px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; margin-top: -22px; box-shadow: 0 10px 24px rgba(16,20,19,.28); }
+.toast { position: absolute; left: 50%; top: 52px; transform: translate(-50%, -110px); z-index: 50; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+.toast.plain { padding-right: 16px; }
+.toast.show { transform: translate(-50%, 0); }
+.toast button { height: 30px; padding: 0 12px; border-radius: 999px; border: 0; background: rgba(255,255,255,.16); color: #6ee7b7; font-size: 13px; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .roll .strip, .inl, .food.snap { transition: none; } .scan.run .line { animation: none; } }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="board-h">
+    <h1>健食<small>食物库 · 跟首页同一套</small></h1>
+    <p>原来的功能都在：拍照 / 相册识别营养表、手动填（填三大营养素自动算热量）、按每 100 g 存、推荐等级、编辑、删除、选克数记进某一顿。原来这些都是弹窗，现在全部在页面里原地展开。</p>
+    <h2>可以点</h2>
+    <ul>
+      <li><b>拍营养表 / 从相册</b>　扫一遍，读到的行亮起来，数字自己填好</li>
+      <li><b>手动填</b>　填蛋白质、碳水、脂肪，热量自己算</li>
+      <li><b>没填名字就点存</b>　输入框抖一下变红</li>
+      <li><b>搜索</b>　匹配的字会高亮；搜不到可以直接存成新食物</li>
+      <li><b>点一样食物</b>　原地展开：选克数、选哪一顿、记进去</li>
+      <li><b>往左滑一样食物</b>　露出编辑 / 删除；删了可以撤销</li>
+    </ul>
+  </div>
+  <div id="main"></div>
+  <div id="second" class="second"></div>
+</div>
+
+<template id="app">
+  <div class="app">
+    <div class="scroll"><div class="stack">
+      <div class="th"><h1>食物库</h1><span class="cnt"><b data-cnt>10</b> 样</span></div>
+
+      <div>
+        <label class="search" data-sbox><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input data-q placeholder="搜一下，比如 鸡胸" autocomplete="off"><button class="clr" data-clr aria-label="清空">×</button></label>
+        <div class="chips" data-chips><i class="chip-pill" data-cpill></i><button data-f="all" class="on">全部</button><button data-f="protein">高蛋白</button><button data-f="light">低热量</button><button data-f="rec">推荐</button></div>
+      </div>
+
+      <section class="addc" data-addc>
+        <div class="addh"><b data-addt>存一样新食物</b><small data-adds>按包装上写的填，会自动换成每 100 g</small></div>
+        <div class="ways">
+          <button data-press data-way="scan" class="main"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>拍营养表</button>
+          <button data-press data-way="album"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20 16l-5-5-8 8"/></svg>从相册</button>
+          <button data-press data-way="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>手动填</button>
+        </div>
+        <div class="inl" data-addinl><div>
+          <div class="scan" data-scan>
+            <i class="cn a"></i><i class="cn b"></i><i class="cn c"></i><i class="cn d"></i>
+            <div class="label">
+              <h5>营养成分表</h5>
+              <div class="r hd"><span>项目</span><span>每100克</span><span>NRV%</span></div>
+              <div class="r" data-r><span>能量</span><span>1658千焦</span><span>20%</span></div>
+              <div class="r" data-r><span>蛋白质</span><span>20.0克</span><span>33%</span></div>
+              <div class="r" data-r><span>脂肪</span><span>12.0克</span><span>20%</span></div>
+              <div class="r" data-r><span>碳水化合物</span><span>52.0克</span><span>17%</span></div>
+              <div class="r"><span>钠</span><span>180毫克</span><span>9%</span></div>
+            </div>
+            <i class="line"></i>
+            <div class="st" data-sst>对准包装背面的营养成分表</div>
+          </div>
+          <div class="form" data-form>
+            <label class="fin" data-fnb><input data-fn placeholder="名字，比如 乳清蛋白粉" autocomplete="off"></label>
+            <div class="fk">
+              <div class="kc"><small>热量 · 自动算</small><b data-fk>0</b><em>kcal</em></div>
+              <div class="amt">这些是<label class="fin"><input data-fa value="100" inputmode="decimal"></label>g 的</div>
+            </div>
+            <div class="fm">
+              <label class="cell p"><small><i></i>蛋白质</small><div><input data-fp inputmode="decimal" placeholder="0"><em>g</em></div></label>
+              <label class="cell c"><small><i></i>碳水</small><div><input data-fc inputmode="decimal" placeholder="0"><em>g</em></div></label>
+              <label class="cell f"><small><i></i>脂肪</small><div><input data-ff inputmode="decimal" placeholder="0"><em>g</em></div></label>
+            </div>
+            <div class="share"><i data-sp style="background:#f0505a"></i><i data-sc style="background:#f5a524"></i><i data-sf style="background:#16a394"></i></div>
+            <div class="share-l"><span>热量来自</span><span data-sl>—</span></div>
+            <div class="fbtn"><button class="ghost" data-press data-cancel>取消</button><button class="go" data-press data-save>存进库</button></div>
+          </div>
+        </div></div>
+      </section>
+
+      <section>
+        <div class="lh"><b>已存的</b><span data-lsub>点一样就能记 · 往左滑改</span></div>
+        <div class="list" data-list></div>
+        <div class="empty" data-empty><b data-et></b><small>库里还没有，可以现在存一个</small><button data-press data-mk>存成新食物</button></div>
+      </section>
+    </div></div>
+
+    <div class="topbar" data-topbar>食物库</div>
+    <nav class="nav">
+      <span data-today><i class="dot" data-dot></i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>今天</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19V11M10 19V5M16 19v-6M21 19H3"/></svg>趋势</span>
+      <div class="plus" data-press aria-label="记一笔"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h14v16H5zM5 9h14"/></svg>食物库</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" stroke-linecap="round"/></svg>我的</span>
+    </nav>
+    <div class="toast" data-toast></div>
+  </div>
+</template>
+
+<script src="shared.js"></script>
+<script>
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const IMG = '../assets/img/';
+// 每 100 g
+const FOODS = [
+  { id: 'salmon', n: '香煎三文鱼', k: 208, p: 20, c: 0, f: 13, img: IMG + 'salmon.jpg' },
+  { id: 'chicken', n: '鸡胸肉饭', k: 155, p: 12, c: 18, f: 3.5, img: IMG + 'chicken-rice.jpg' },
+  { id: 'eggs', n: '水煮蛋', k: 143, p: 12.6, c: 0.7, f: 9.5, img: IMG + 'eggs.jpg' },
+  { id: 'oat', n: '燕麦牛奶', k: 96, p: 4, c: 14, f: 2.8, img: IMG + 'oatmeal.jpg' },
+  { id: 'apple', n: '苹果', k: 52, p: 0.3, c: 14, f: 0.2, img: IMG + 'apple.jpg' },
+  { id: 'whey', n: '乳清蛋白粉', k: 395, p: 78, c: 8, f: 5 },
+  { id: 'breast', n: '水煮鸡胸肉', k: 133, p: 31, c: 0, f: 1.2 },
+  { id: 'yogurt', n: '希腊酸奶', k: 97, p: 9, c: 4, f: 5 },
+  { id: 'bread', n: '全麦面包', k: 247, p: 13, c: 41, f: 3.4 },
+  { id: 'chips', n: '薯片', k: 536, p: 7, c: 53, f: 35 },
+];
+const GRADE = { great: '强烈推荐', good: '推荐', ok: '一般', avoid: '不推荐' };
+// 和 App 里 foodScore 同一个思路（减脂目标）：蛋白密度 + 空热量判断
+function grade(f) {
+  const dens = f.k > 0 ? f.p / f.k * 100 : 0, cs = f.k ? f.c * 4 / f.k : 0, fs = f.k ? f.f * 9 / f.k : 0;
+  if (f.k >= 200 && ((cs >= .5 && dens < 4) || (fs >= .45 && dens < 8))) return 'avoid';
+  if (dens >= 10) return 'great';
+  if (dens >= 6 || f.k < 100) return 'good';
+  return 'ok';
+}
+const kcalOf = (p, c, f) => Math.round(p * 4 + c * 4 + f * 9);
+const esc = (t) => t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+function roll(el, text) {
+  const chars = [...text], sig = chars.map((c) => (/\d/.test(c) ? 'd' : c)).join('');
+  if (el._sig !== sig) {
+    el._sig = sig; el.classList.add('roll');
+    el.innerHTML = chars.map((c) => /\d/.test(c) ? `<span class="dg"><span class="strip">${[...'0123456789'].map((d) => `<i>${d}</i>`).join('')}</span></span>` : `<span>${c}</span>`).join('');
+  }
+  const strips = el.querySelectorAll('.strip'); let k = 0;
+  chars.forEach((c) => {
+    if (!/\d/.test(c)) return;
+    const st = strips[k++], w = st.children[+c].offsetWidth;
+    st.style.transform = `translateY(${-c}em)`;
+    st.parentElement.style.width = w ? w + 'px' : '';   // 每一位按自己的宽度，"1" 不留空
+  });
+}
+
+function mount(host, { label, openId = null, grams: startG = 100 } = {}) {
+  const { phone, pressable, pop } = GYM;
+  const p = phone({ label });
+  host.appendChild(p.wrap);
+  p.content.appendChild(document.getElementById('app').content.cloneNode(true));
+  const $ = (q) => p.content.querySelector(q);
+  pressable(p.content);
+  let foods = FOODS.map((f) => ({ ...f }));
+  let filter = 'all', query = '', open = null, grams = startG, meal = 'dinner', editing = null, swiped = null;
+  const MEAL = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
+
+  function toast(msg, undo) {
+    const t = $('[data-toast]');
+    t.innerHTML = `<span>${msg}</span>${undo ? '<button data-undo>撤销</button>' : ''}`;
+    t.classList.toggle('plain', !undo); t._undo = undo;
+    t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), undo ? 3200 : 1800);
+  }
+
+  /* ---------- 列表 ---------- */
+  const pass = (f) => {
+    const g = grade(f), dens = f.p / f.k * 100;
+    if (filter === 'protein' && dens < 8) return false;
+    if (filter === 'light' && f.k > 150) return false;
+    if (filter === 'rec' && !(g === 'great' || g === 'good')) return false;
+    return !query || f.n.includes(query);
+  };
+  const hl = (name) => query && name.includes(query) ? esc(name).replace(esc(query), `<mark>${esc(query)}</mark>`) : esc(name);
+  function rowHTML(f) {
+    const g = grade(f), tot = f.p * 4 + f.c * 4 + f.f * 9 || 1;
+    return `<div class="fw" data-id="${f.id}">
+      <div class="acts"><button data-edit><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>编辑</button><button class="del" data-del><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>删除</button></div>
+      <div class="food" data-row>
+        <div class="top">
+          <div class="pic">${f.img ? `<img class="ph" src="${f.img}" alt="">` : esc(f.n[0])}</div>
+          <div class="info"><b>${hl(f.n)}</b><small>每 100 g · <span>${f.k}</span> kcal</small>
+            <div class="mb"><i style="flex:${f.p * 4 / tot};background:#f0505a"></i><i style="flex:${f.c * 4 / tot};background:#f5a524"></i><i style="flex:${f.f * 9 / tot};background:#16a394"></i></div></div>
+          <span class="badge g-${g}">${GRADE[g]}</span>
+        </div>
+        <div class="inl" data-exw><div></div></div>
+      </div>
+    </div>`;
+  }
+  function renderList(flip = true) {
+    const list = $('[data-list]');
+    const before = {};
+    if (flip) list.querySelectorAll('.fw').forEach((el) => (before[el.dataset.id] = el.getBoundingClientRect().top));
+    const shown = foods.filter(pass);
+    list.innerHTML = shown.map(rowHTML).join('');
+    roll($('[data-cnt]'), String(foods.length));
+    const em = $('[data-empty]'); em.classList.toggle('on', !shown.length);
+    $('[data-et]').textContent = query ? `没找到「${query}」` : '这一类还没有';
+    $('[data-mk]').style.display = query ? '' : 'none';
+    if (open && !shown.find((f) => f.id === open)) open = null;
+    if (open) fillEx(open, true);
+    if (!flip || REDUCED) return;
+    const scale = p.content.getBoundingClientRect().width / p.content.offsetWidth || 1;
+    let n = 0;
+    list.querySelectorAll('.fw').forEach((el) => {
+      const old = before[el.dataset.id];
+      if (old !== undefined) {
+        const dy = (old - el.getBoundingClientRect().top) / scale;
+        if (Math.abs(dy) > 1) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.3,1.15,.5,1)' });
+      } else {
+        el.animate([{ opacity: 0, transform: 'translateY(12px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: n++ * 40, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'backwards' });
+      }
+    });
+  }
+
+  /* ---------- 展开：克数 / 哪一顿 / 记进去 ---------- */
+  function exHTML(f) {
+    return `<div class="ex">
+      <div class="gch">${[50, 100, 150, 200].map((g) => `<button data-press data-g="${g}">${g} g</button>`).join('')}</div>
+      <div class="exm">
+        <div class="step"><button data-step="-1" aria-label="减 10 克">−</button><b><span class="v"><span data-gv></span><em>g</em></span><i class="ruler" data-ruler></i></b><button data-step="1" aria-label="加 10 克">+</button></div>
+        <div class="res"><b data-rk></b><em>kcal</em><small>蛋白质 <span data-rp></span> g</small></div>
+      </div>
+      <div class="meals">${Object.entries(MEAL).map(([k, v]) => `<button data-press data-meal="${k}">${v}</button>`).join('')}</div>
+      <button class="log" data-press data-log></button>
+    </div>`;
+  }
+  function setGrams(g) {
+    const fw = $(`.fw[data-id="${open}"]`); if (!fw) return;
+    grams = Math.max(10, Math.min(1000, Math.round(g / 10) * 10));
+    const f = foods.find((x) => x.id === open);
+    roll(fw.querySelector('[data-gv]'), String(grams));
+    const x = 30 - grams * .6; fw.querySelector('[data-ruler]').style.backgroundPosition = `${x}px 0, ${x}px 100%`;
+    roll(fw.querySelector('[data-rk]'), String(Math.round(f.k * grams / 100)));
+    roll(fw.querySelector('[data-rp]'), (Math.round(f.p * grams / 10) / 10).toFixed(1));
+    fw.querySelectorAll('[data-g]').forEach((b) => b.classList.toggle('on', +b.dataset.g === grams));
+  }
+  function setMeal(m) {
+    meal = m; const fw = $(`.fw[data-id="${open}"]`); if (!fw) return;
+    fw.querySelectorAll('[data-meal]').forEach((b) => b.classList.toggle('on', b.dataset.meal === m));
+    fw.querySelector('[data-log]').textContent = `记进${MEAL[m]}`;
+  }
+  function fillEx(id, instant) {
+    const fw = $(`.fw[data-id="${id}"]`); if (!fw) return;
+    const box = fw.querySelector('[data-exw] > div'); box.innerHTML = exHTML(foods.find((x) => x.id === id));
+    setGrams(grams); setMeal(meal);
+    requestAnimationFrame(() => fw.querySelector('[data-ruler]').classList.add('anim'));
+    const w = fw.querySelector('[data-exw]');
+    if (instant) { w.style.transition = 'none'; w.classList.add('open'); fw.querySelector('.food').classList.add('opened'); requestAnimationFrame(() => (w.style.transition = '')); }
+    else requestAnimationFrame(() => { w.classList.add('open'); fw.querySelector('.food').classList.add('opened'); });
+  }
+  function toggle(id) {
+    const prev = open && $(`.fw[data-id="${open}"]`);
+    if (prev) { prev.querySelector('[data-exw]').classList.remove('open'); prev.querySelector('.food').classList.remove('opened'); }
+    if (open === id) { open = null; return; }
+    open = id; grams = 100; fillEx(id);
+    setTimeout(() => { const fw = $(`.fw[data-id="${id}"]`); fw && fw.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 380);
+  }
+
+  // − / +：每步 10 g，按住加速（反馈同趋势页）
+  function stepFx(btn, dir, holding) {
+    if (REDUCED) return;
+    const rip = document.createElement('span'); rip.className = 'rip'; btn.appendChild(rip);
+    rip.animate([{ transform: 'scale(.7)', opacity: .7 }, { transform: 'scale(1.9)', opacity: 0 }], { duration: 520, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => rip.remove();
+    if (holding) return;
+    const st = btn.parentElement, f = document.createElement('span'); f.className = 'fly'; f.textContent = `${dir > 0 ? '+' : '−'}10 g`;
+    f.style.left = btn.offsetLeft + btn.offsetWidth / 2 + 'px'; st.appendChild(f);
+    f.animate([{ transform: 'translate(-50%, 0) scale(.6)', opacity: 0 }, { transform: 'translate(-50%, -16px) scale(1.05)', opacity: 1, offset: .3 }, { transform: 'translate(-50%, -32px) scale(1)', opacity: 0 }], { duration: 720, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => f.remove();
+  }
+  let stepTm = 0;
+  p.content.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('[data-step]'); if (!btn) return;
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    const dir = +btn.dataset.step; btn.classList.add('down');
+    setGrams(grams + dir * 10); stepFx(btn, dir, false);
+    let n = 0;
+    const rep = () => { btn.classList.add('hold'); setGrams(grams + dir * 10); stepFx(btn, dir, true); n++; stepTm = setTimeout(rep, n > 6 ? 80 : 140); };
+    stepTm = setTimeout(rep, 400);
+    const end = () => { clearTimeout(stepTm); btn.classList.remove('down', 'hold'); btn.removeEventListener('pointerup', end); btn.removeEventListener('pointercancel', end); };
+    btn.addEventListener('pointerup', end); btn.addEventListener('pointercancel', end);
+  });
+
+  /* ---------- 往左滑：编辑 / 删除 ---------- */
+  const OPEN_X = -148;
+  function closeSwipe(except) {
+    p.content.querySelectorAll('[data-row]').forEach((r) => { if (r !== except && r._x) { r.classList.add('snap'); r.style.transform = ''; r._x = 0; } });
+    if (!except) swiped = null;
+  }
+  p.content.addEventListener('pointerdown', (e) => {
+    const row = e.target.closest('[data-row]'); if (!row || e.target.closest('[data-step], .ex')) return;
+    const x0 = e.clientX, y0 = e.clientY, base = row._x || 0, scale = p.content.getBoundingClientRect().width / p.content.offsetWidth || 1;
+    let mode = null, last = [[x0, performance.now()]];
+    const move = (ev) => {
+      const dx = (ev.clientX - x0) / scale, dy = (ev.clientY - y0) / scale;
+      if (!mode) { if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { mode = 'x'; row.classList.remove('snap'); try { row.setPointerCapture(e.pointerId); } catch (_) {} closeSwipe(row); } else if (Math.abs(dy) > 8) { mode = 'y'; } }
+      if (mode !== 'x') return;
+      let x = base + dx;
+      if (x > 0) x = x * .25;                                    // 往右拉：有阻力
+      if (x < OPEN_X) x = OPEN_X + (x - OPEN_X) * .3;            // 拉过头：有阻力
+      row._x = x; row.style.transform = `translateX(${x}px)`;
+      last.push([ev.clientX, performance.now()]); if (last.length > 5) last.shift();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (mode !== 'x') return;
+      row._moved = true; setTimeout(() => (row._moved = false), 0);
+      const [a, b] = [last[0], last[last.length - 1]], v = (b[0] - a[0]) / Math.max(1, b[1] - a[1]) * 1000 / scale;
+      const proj = row._x + v * .998 / (1 - .998) / 1000;     // 按速度往前推一点再决定停哪
+      const to = proj < OPEN_X / 2 ? OPEN_X : 0;
+      row.classList.add('snap'); row.style.transform = to ? `translateX(${to}px)` : ''; row._x = to;
+      swiped = to ? row : null;
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  });
+
+  /* ---------- 新增 / 编辑表单 ---------- */
+  const fn = $('[data-fn]'), fa = $('[data-fa]'), fp = $('[data-fp]'), fc = $('[data-fc]'), ff = $('[data-ff]');
+  function calc() {
+    const P = +fp.value || 0, C = +fc.value || 0, F = +ff.value || 0, k = kcalOf(P, C, F), tot = P * 4 + C * 4 + F * 9;
+    roll($('[data-fk]'), String(k));
+    $('[data-sp]').style.width = tot ? P * 4 / tot * 100 + '%' : '0';
+    $('[data-sc]').style.width = tot ? C * 4 / tot * 100 + '%' : '0';
+    $('[data-sf]').style.width = tot ? F * 9 / tot * 100 + '%' : '0';
+    $('[data-sl]').textContent = tot ? `蛋白 ${Math.round(P * 4 / tot * 100)}% · 碳水 ${Math.round(C * 4 / tot * 100)}% · 脂肪 ${Math.round(F * 9 / tot * 100)}%` : '—';
+    return k;
+  }
+  [fp, fc, ff, fa].forEach((i) => i.addEventListener('input', calc));
+  fn.addEventListener('input', () => $('[data-fnb]').classList.remove('bad'));
+  function setMode(mode) {
+    const addc = $('[data-addc]');
+    $('[data-scan]').style.display = mode === 'scan' ? '' : 'none';
+    $('[data-form]').style.display = mode === 'form' ? '' : 'none';
+    $('[data-addinl]').classList.toggle('open', !!mode);
+    if (mode === 'form') requestAnimationFrame(calc);   // 表单显示后再量一次数字宽度
+    if (!mode) p.content.querySelectorAll('[data-way]').forEach((b) => b.classList.remove('cur'));
+  }
+  function resetForm(v = {}) { fn.value = v.n || ''; fa.value = 100; fp.value = v.p ?? ''; fc.value = v.c ?? ''; ff.value = v.f ?? ''; $('[data-fnb]').classList.remove('bad'); calc(); }
+  function closeAdd() {
+    setMode(null); editing = null;
+    $('[data-addt]').textContent = '存一样新食物'; $('[data-adds]').textContent = '按包装上写的填，会自动换成每 100 g'; $('[data-save]').textContent = '存进库';
+  }
+  // 数字一点点跑到目标
+  function countIn(input, to, dur = 700) {
+    if (REDUCED) { input.value = to; calc(); return; }
+    const t0 = performance.now(), dec = String(to).includes('.') ? 1 : 0;
+    const tick = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); input.value = (to * e).toFixed(dec); calc(); if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  function startScan(fromAlbum) {
+    resetForm(); setMode('scan');
+    const sc = $('[data-scan]'), rows = sc.querySelectorAll('[data-r]');
+    rows.forEach((r) => r.classList.remove('read'));
+    $('[data-sst]').textContent = fromAlbum ? '正在读这张图…' : '正在读营养成分表…';
+    sc.classList.remove('run'); void sc.offsetWidth; sc.classList.add('run');
+    const T = REDUCED ? 0 : 2000;
+    rows.forEach((r, i) => setTimeout(() => r.classList.add('read'), T + i * 160));
+    setTimeout(() => {
+      $('[data-sst]').textContent = '读好了';
+      setTimeout(() => {
+        setMode('form');
+        fn.value = '高蛋白燕麦棒';
+        countIn(fp, 20); setTimeout(() => countIn(fc, 52), 120); setTimeout(() => countIn(ff, 12), 240);
+        toast('读好了 · 看一眼没问题就存');
+      }, REDUCED ? 0 : 450);
+    }, T + rows.length * 160);
+  }
+  function save() {
+    const name = fn.value.trim(), amt = +fa.value || 100, k = calc();
+    if (!name || !k) {
+      const bad = !name ? $('[data-fnb]') : $('.fm');
+      if (!name) bad.classList.add('bad');
+      bad.classList.remove('shake'); void bad.offsetWidth; bad.classList.add('shake');
+      toast(!name ? '先起个名字' : '至少填一样营养素');
+      return;
+    }
+    const r = 100 / amt, P = Math.round((+fp.value || 0) * r * 10) / 10, C = Math.round((+fc.value || 0) * r * 10) / 10, F = Math.round((+ff.value || 0) * r * 10) / 10;
+    const food = { n: name, p: P, c: C, f: F, k: kcalOf(P, C, F) };
+    let id;
+    if (editing) { Object.assign(foods.find((x) => x.id === editing), food); id = editing; toast(`改好了 · ${name}`); }
+    else { id = 'n' + Date.now(); foods.unshift({ id, ...food }); toast(`存进库了 · ${name}`); }
+    closeAdd(); query = ''; $('[data-q]').value = ''; $('[data-sbox]').classList.remove('has');
+    renderList();
+    const fw = $(`.fw[data-id="${id}"]`);
+    if (fw) { fw.classList.add('fresh'); setTimeout(() => fw.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350); }
+  }
+  function startEdit(id) {
+    const f = foods.find((x) => x.id === id); editing = id;
+    closeSwipe();
+    resetForm({ n: f.n, p: f.p, c: f.c, f: f.f }); setMode('form');
+    $('[data-addt]').textContent = `改 · ${f.n}`; $('[data-adds]').textContent = '下面是每 100 g 的数'; $('[data-save]').textContent = '保存修改';
+    $('.scroll').scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function remove(id) {
+    const i = foods.findIndex((x) => x.id === id), f = foods[i], fw = $(`.fw[data-id="${id}"]`);
+    // 数据立刻删；动画只管样子，播完再按当前数据重画（中途点了撤销也不会乱）
+    foods.splice(i, 1); if (open === id) open = null; swiped = null;
+    const done = () => renderList(false);
+    if (fw && !REDUCED) {
+      const h = fw.offsetHeight;
+      fw.animate([{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0, marginTop: '-10px' }], { duration: 320, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }).onfinish = done;
+    } else done();
+    toast(`删了 ${f.n}`, () => { foods.splice(i, 0, f); renderList(); const n = $(`.fw[data-id="${id}"]`); n && n.classList.add('fresh'); });
+  }
+
+  /* ---------- 点击 ---------- */
+  p.content.addEventListener('click', (e) => {
+    const t = e.target;
+    const undo = t.closest('[data-undo]'); if (undo) { const tt = $('[data-toast]'); tt.classList.remove('show'); tt._undo && tt._undo(); tt._undo = null; return; }
+    const way = t.closest('[data-way]');
+    if (way) {
+      if (swiped) closeSwipe();
+      p.content.querySelectorAll('[data-way]').forEach((b) => b.classList.toggle('cur', b === way));
+      editing = null; $('[data-addt]').textContent = '存一样新食物'; $('[data-save]').textContent = '存进库';
+      if (way.dataset.way === 'manual') { resetForm(); setMode('form'); setTimeout(() => fn.focus({ preventScroll: true }), 300); }
+      else startScan(way.dataset.way === 'album');
+      return;
+    }
+    if (t.closest('[data-cancel]')) { closeAdd(); return; }
+    if (t.closest('[data-save]')) { save(); return; }
+    if (t.closest('[data-mk]')) { const q = query; p.content.querySelector('[data-way="manual"]').classList.add('cur'); resetForm({ n: q }); setMode('form'); $('.scroll').scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const ed = t.closest('[data-edit]'); if (ed) { startEdit(ed.closest('.fw').dataset.id); return; }
+    const del = t.closest('[data-del]'); if (del) { remove(del.closest('.fw').dataset.id); return; }
+    const g = t.closest('[data-g]'); if (g) { setGrams(+g.dataset.g); return; }
+    const ml = t.closest('[data-meal]'); if (ml) { setMeal(ml.dataset.meal); return; }
+    const lg = t.closest('[data-log]');
+    if (lg) {
+      const f = foods.find((x) => x.id === open), kc = Math.round(f.k * grams / 100);
+      toast(`记进${MEAL[meal]} · ${f.n} ${grams} g · ${kc} kcal`);
+      const dot = $('[data-dot]');
+      if (!REDUCED) dot.animate([{ transform: 'scale(0)' }, { transform: 'scale(1.5)', offset: .5 }, { transform: 'scale(1)' }], { duration: 500, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'forwards' }); else dot.style.transform = 'scale(1)';
+      pop($('[data-today]'));
+      toggle(open);
+      return;
+    }
+    if (t.closest('.ex')) return;
+    const row = t.closest('[data-row]');
+    if (row) {
+      if (row._moved) return;
+      if (swiped) { closeSwipe(); return; }
+      toggle(row.closest('.fw').dataset.id); return;
+    }
+    if (swiped) closeSwipe();
+  });
+
+  /* ---------- 搜索 / 筛选 ---------- */
+  const qi = $('[data-q]');
+  qi.addEventListener('input', () => { query = qi.value.trim(); $('[data-sbox]').classList.toggle('has', !!qi.value); renderList(); });
+  $('[data-clr]').addEventListener('click', (e) => { e.preventDefault(); qi.value = ''; query = ''; $('[data-sbox]').classList.remove('has'); renderList(); qi.focus({ preventScroll: true }); });
+  const FI = ['all', 'protein', 'light', 'rec'];
+  $('[data-chips]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-f]'); if (!b || b.dataset.f === filter) return;
+    const pill = $('[data-cpill]'), w = pill.offsetWidth, a = FI.indexOf(filter) * w, z = FI.indexOf(b.dataset.f) * w;
+    filter = b.dataset.f;
+    p.content.querySelectorAll('[data-f]').forEach((x) => x.classList.toggle('on', x === b));
+    pill.style.transform = `translateX(${z}px)`;
+    if (!REDUCED) pill.animate([{ transform: `translateX(${a}px)` }, { transform: `translateX(${(a + z) / 2}px) scaleX(1.3)`, offset: .45 }, { transform: `translateX(${z}px)` }], { duration: 480, easing: 'cubic-bezier(.3,1.15,.5,1)' });
+    renderList();
+  });
+
+  /* ---------- 滚动：大标题收成顶栏 ---------- */
+  const sc = $('.scroll'), topbar = $('[data-topbar]'), h1 = $('.th h1');
+  sc.addEventListener('scroll', () => {
+    const y = sc.scrollTop, k = Math.min(1, Math.max(0, y / 48));
+    topbar.classList.toggle('on', y > 44);
+    h1.style.opacity = 1 - k; h1.style.transform = `scale(${1 - k * .12}) translateY(${-k * 6}px)`;
+  }, { passive: true });
+  p.content.querySelector('.plus').addEventListener('click', () => toast('记一笔 · 在首页演示'));
+
+  setMode(null); calc();
+  open = openId; renderList(false);
+  if (openId) setTimeout(() => { const fw = $(`.fw[data-id="${openId}"]`); sc.scrollTop = fw.offsetTop - 120; }, 50);
+}
+
+mount(document.getElementById('main'), { label: '食物库 · 可以点' });
+mount(document.getElementById('second'), { label: '点开一样：选克数、记进晚餐', openId: 'salmon', grams: 150 });
+</script>
+</body>
+</html>

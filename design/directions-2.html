@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>健食 UI 方向稿 · 第二轮</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&display=swap">
+<style>
+/*
+  数据和第一轮一样：目标 2000 kcal / 蛋白 150 / 碳水 200 / 脂肪 65
+  早餐 460（燕麦牛奶 320 + 水煮蛋 140）· 午餐 620（鸡胸肉饭）· 加餐 95（苹果）
+  合计 1175，剩余 825；饮水 1250 / 2000 ml；体重 66.4
+  每个手机上的「+ 再吃一份」可以点：加 180 kcal，看反馈。
+*/
+:root { --cjk: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; --num: "Barlow Condensed", var(--cjk); --spring: cubic-bezier(.34, 1.36, .5, 1); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #d9dcdb; font-family: var(--cjk); color: #111; padding: 32px 16px 64px; }
+h1.page { font-size: 22px; font-weight: 700; margin: 0 auto 6px; max-width: 1240px; }
+p.lead { color: #444; font-size: 14px; max-width: 1240px; margin: 0 auto 28px; line-height: 1.6; }
+.row { display: flex; flex-wrap: wrap; gap: 36px; justify-content: center; max-width: 1240px; margin: 0 auto; }
+.col { width: 390px; }
+.col h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.col .why { font-size: 13px; color: #444; line-height: 1.55; margin-bottom: 14px; min-height: 80px; }
+.phone { width: 390px; height: 844px; border-radius: 44px; overflow: hidden; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,.18); }
+.screen { position: absolute; inset: 0; overflow: hidden; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.press { transition: transform 140ms var(--spring), filter 120ms; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.press:active { transform: scale(.94); filter: brightness(.94); transition-duration: 80ms; }
+.status { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 28px; font-size: 14px; font-weight: 600; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: start; padding: 8px 8px 0; background: rgba(255,255,255,.85); backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid rgba(0,0,0,.06); }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding-top: 4px; color: #7a8481; }
+.tab.on { color: #111; }
+.tab svg { width: 24px; height: 24px; }
+.tab-add { justify-self: center; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; margin-top: -14px; background: #111; color: #fff; }
+.tab-add svg { width: 28px; height: 28px; }
+.bump { animation: bump 420ms var(--spring); }
+@keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* =========================================================
+   A · 一碗饭 — 今天的热量装进一只碗，一层一层是三顿饭
+   ========================================================= */
+.A { background: #f4f2ee; }
+.A .top { display: flex; justify-content: space-between; align-items: center; padding: 6px 20px 0; }
+.A .top b { font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+.A .top span { font-size: 13px; color: #5d5a54; font-weight: 600; }
+.A .bowlwrap { position: relative; height: 312px; margin-top: 6px; }
+.A .bowl { position: absolute; left: 50%; top: 110px; width: 300px; height: 190px; transform: translateX(-50%); border-radius: 0 0 150px 150px / 0 0 170px 170px; background: #fff; overflow: hidden; box-shadow: inset 0 -10px 24px rgba(0,0,0,.05); }
+.A .rim { position: absolute; left: 50%; top: 98px; width: 320px; height: 26px; transform: translateX(-50%); border-radius: 50%; background: #e8e3da; }
+.A .rim::after { content: ""; position: absolute; inset: 5px 10px; border-radius: 50%; background: #d6cfc3; }
+.A .layers { position: absolute; inset: 0; display: flex; flex-direction: column-reverse; }
+.A .layer { width: 100%; transition: height 600ms var(--spring); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: rgba(0,0,0,.55); overflow: hidden; white-space: nowrap; }
+.A .l1 { background: #f6c86a; } .A .l2 { background: #7ccf9a; } .A .l3 { background: #f39a7a; } .A .l4 { background: #9ec5f2; }
+.A .brim { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); font-size: 12px; font-weight: 700; color: #5d5a54; }
+.A .left { position: absolute; left: 0; right: 0; top: 0; text-align: center; }
+.A .left .k { font-size: 54px; font-weight: 800; line-height: 1; transition: color .2s; }
+.A .left .t { font-size: 14px; font-weight: 700; color: #5d5a54; }
+.A .legend { display: flex; justify-content: center; gap: 14px; font-size: 12px; font-weight: 700; color: #5d5a54; margin-top: 2px; }
+.A .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.A .macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 16px 0; }
+.A .m { background: #fff; border-radius: 18px; padding: 10px 12px; }
+.A .m .t { font-size: 12px; font-weight: 700; color: #5d5a54; display: flex; justify-content: space-between; }
+.A .m .v { font-size: 24px; font-weight: 700; }
+.A .m .v small { font-size: 13px; color: #8a867e; }
+.A .m .bar { height: 6px; border-radius: 3px; background: #eee9e1; overflow: hidden; margin-top: 4px; }
+.A .m .bar i { display: block; height: 100%; border-radius: 3px; transition: width 600ms var(--spring); }
+.A .act { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 8px; margin: 10px 16px 0; }
+.A .act > div { background: #fff; border-radius: 18px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: #5d5a54; }
+.A .act b { display: block; font-size: 20px; color: #111; }
+.A .act .go { background: #111; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+
+/* =========================================================
+   B · 今天这一天 — 横向时间轴，饭是轴上的气泡，空白处是还能吃的
+   ========================================================= */
+.B { background: #f3f5f4; }
+.B .top { padding: 6px 20px 0; }
+.B .top .d { font-size: 13px; color: #59625f; font-weight: 700; }
+.B .top .h { font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1.25; margin-top: 2px; }
+.B .top .h em { font-style: normal; color: #0b8a5f; }
+.B .track { position: relative; margin: 18px 0 0; height: 210px; overflow: hidden; }
+.B .axis { position: absolute; left: 16px; right: 16px; top: 132px; height: 6px; border-radius: 3px; background: #dfe5e2; }
+.B .past { position: absolute; left: 16px; top: 132px; height: 6px; width: 212px; border-radius: 3px; background: #111; }
+.B .now { position: absolute; left: 226px; top: 112px; width: 2px; height: 46px; background: #111; }
+.B .now span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; background: #111; color: #fff; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.B .bub { position: absolute; border-radius: 50%; display: grid; place-items: center; text-align: center; font-weight: 800; color: #10231b; transition: transform 500ms var(--spring); }
+.B .bub small { display: block; font-size: 10px; font-weight: 700; opacity: .7; }
+.B .bub .k { font-size: 17px; line-height: 1; }
+.B .ghost { position: absolute; left: 262px; top: 64px; width: 108px; height: 108px; border-radius: 50%; border: 2px dashed #9aa7a2; display: grid; place-items: center; text-align: center; font-size: 12px; font-weight: 700; color: #59625f; background: rgba(255,255,255,.5); }
+.B .ghost b { display: block; font-size: 22px; color: #111; font-family: var(--num); }
+.B .ticks { position: absolute; left: 16px; right: 16px; top: 146px; display: flex; justify-content: space-between; font-size: 11px; color: #59625f; font-weight: 600; }
+.B .macros { margin: 4px 16px 0; background: #fff; border-radius: 22px; padding: 6px 14px; }
+.B .mr { display: grid; grid-template-columns: 52px 1fr 72px; gap: 10px; align-items: center; padding: 8px 0; font-size: 13px; font-weight: 700; }
+.B .mr + .mr { border-top: 1px solid #eef1f0; }
+.B .mr .bar { height: 10px; border-radius: 5px; background: #eef1f0; overflow: hidden; }
+.B .mr .bar i { display: block; height: 100%; border-radius: 5px; transition: width 600ms var(--spring); }
+.B .mr .v { text-align: right; font-family: var(--num); font-size: 16px; }
+.B .mr .v em { font-style: normal; color: #7a8481; }
+.B .next { margin: 10px 16px 0; background: #111; color: #fff; border-radius: 22px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; }
+.B .next .t { font-size: 12px; color: #b9c2bf; font-weight: 700; }
+.B .next .v { font-size: 16px; font-weight: 800; margin-top: 2px; }
+.B .next .go { background: #34d399; color: #04130d; border-radius: 999px; padding: 10px 14px; font-weight: 800; font-size: 14px; }
+
+/* =========================================================
+   C · 今日任务 — 像游戏的每日任务板：完成一项打一个勾
+   ========================================================= */
+.C { background: #eef3f1; }
+.C .top { display: flex; justify-content: space-between; align-items: center; padding: 6px 20px 0; }
+.C .top b { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.C .streak { display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 6px 12px 6px 8px; font-size: 13px; font-weight: 800; }
+.C .streak i { width: 22px; height: 22px; border-radius: 50%; background: #ff8a3d; color: #fff; display: grid; place-items: center; font-style: normal; font-size: 12px; }
+.C .energy { margin: 14px 16px 0; background: #111; color: #fff; border-radius: 26px; padding: 16px; }
+.C .energy .row1 { display: flex; justify-content: space-between; align-items: baseline; }
+.C .energy .t { font-size: 13px; color: #b9c2bf; font-weight: 700; }
+.C .energy .k { font-size: 44px; font-weight: 800; line-height: 1; }
+.C .energy .k small { font-size: 16px; color: #b9c2bf; }
+.C .ebar { position: relative; height: 22px; border-radius: 11px; background: #2a2d2c; margin-top: 12px; overflow: hidden; }
+.C .ebar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 11px; background: #34d399; transition: width 600ms var(--spring); }
+.C .ebar span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 800; color: #b9c2bf; }
+.C .quests { margin: 12px 16px 0; display: grid; gap: 8px; }
+.C .q { background: #fff; border-radius: 20px; padding: 12px 14px; display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; }
+.C .q .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+.C .q .n { font-size: 15px; font-weight: 800; }
+.C .q .p { font-size: 12px; color: #59625f; font-weight: 600; margin-top: 2px; }
+.C .q .bar { height: 6px; border-radius: 3px; background: #eef1f0; overflow: hidden; margin-top: 6px; }
+.C .q .bar i { display: block; height: 100%; border-radius: 3px; transition: width 600ms var(--spring); }
+.C .q .btn { min-width: 44px; height: 44px; border-radius: 14px; background: #eef3f1; display: grid; place-items: center; font-weight: 800; font-size: 20px; }
+.C .q.done { background: #e2f7ec; }
+.C .q.done .btn { background: #10b981; color: #fff; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1 class="page">健食 · 第二轮方向</h1>
+<p class="lead">这次三个方向都从"吃饭"本身找形式，让人一眼看懂"今天吃到哪了"。每台手机底部都有能点的按钮（"+ 再吃一份 180"、"+ 一杯水"等），点了数字和图形会带回弹地变化，可以感受一下反馈。流程和上一轮一样：底部导航 今天 / 趋势 / + / 食物库 / 我的。</p>
+
+<div class="row">
+
+<!-- ================= A · 一碗饭 ================= -->
+<div class="col">
+  <h2>A · 一碗饭</h2>
+  <p class="why">今天的热量装进一只碗：碗口是目标，一层一层是早餐、午餐、加餐、晚餐。碗满了就是吃够了，溢出来就是超了。谁都看得懂，也最有"吃"的感觉。</p>
+  <div class="phone"><div class="screen A" id="A">
+    <div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="top"><b>今天</b><span>11月5日 周三</span></div>
+    <div class="bowlwrap">
+      <div class="left"><div class="k num" data-left>825</div><div class="t">还能吃 kcal</div></div>
+      <div class="rim"></div>
+      <div class="bowl press" title="点碗看详情">
+        <div class="layers">
+          <div class="layer l1" data-layer="460" style="height:23%">早餐 460</div>
+          <div class="layer l2" data-layer="620" style="height:31%">午餐 620</div>
+          <div class="layer l3" data-layer="95" style="height:4.75%"></div>
+          <div class="layer l4" data-layer="0" style="height:0%">晚餐</div>
+        </div>
+      </div>
+    </div>
+    <div class="legend"><span><i style="background:#f6c86a"></i>早餐</span><span><i style="background:#7ccf9a"></i>午餐</span><span><i style="background:#f39a7a"></i>加餐</span><span><i style="background:#9ec5f2"></i>晚餐</span></div>
+    <div class="macros">
+      <div class="m press"><div class="t">蛋白质<span>50%</span></div><div class="v num">74.5<small>/150</small></div><div class="bar"><i style="width:50%;background:#a855f7"></i></div></div>
+      <div class="m press"><div class="t">碳水<span>72%</span></div><div class="v num">144<small>/200</small></div><div class="bar"><i style="width:72%;background:#3b82f6"></i></div></div>
+      <div class="m press"><div class="t">脂肪<span>50%</span></div><div class="v num">32.3<small>/65</small></div><div class="bar"><i style="width:50%;background:#f97316"></i></div></div>
+    </div>
+    <div class="act">
+      <div class="press">饮水<b class="num">1250</b></div>
+      <div class="press">体重<b class="num">66.4</b></div>
+      <div class="go press" data-add-a>+ 再吃一份 180</div>
+    </div>
+    <nav class="tabbar">
+      <div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11h18a9 9 0 0 1-18 0zM8 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/></svg>今天</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg>趋势</div>
+      <div class="tab-add press"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v15H4zM4 10h16"/></svg>食物库</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg>我的</div>
+    </nav>
+  </div></div>
+</div>
+
+<!-- ================= B · 今天这一天 ================= -->
+<div class="col">
+  <h2>B · 今天这一天</h2>
+  <p class="why">把一天摊成一条时间轴：吃过的饭是轴上的气泡，越大热量越多；"现在"之后是虚线圈，告诉你下一顿大概还能吃多少。最像"过日子"，下一步该干什么最清楚。</p>
+  <div class="phone"><div class="screen B" id="B">
+    <div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="top"><div class="d">11月5日 周三 · 17:00</div><div class="h">今天还能吃 <em class="num" data-left>825</em> kcal<br>晚饭别超 <span class="num" data-dinner>700</span></div></div>
+    <div class="track">
+      <div class="axis"></div><div class="past"></div>
+      <div class="bub press" style="left:44px;top:72px;width:80px;height:80px;background:#f6c86a"><div><small>早餐 8:10</small><span class="k num">460</span></div></div>
+      <div class="bub press" style="left:118px;top:52px;width:100px;height:100px;background:#7ccf9a"><div><small>午餐 12:30</small><span class="k num">620</span></div></div>
+      <div class="bub press" style="left:184px;top:104px;width:40px;height:40px;background:#f39a7a"><div><span class="k num" style="font-size:13px">95</span></div></div>
+      <div class="now"><span>现在</span></div>
+      <div class="ghost press" data-ghost><div>晚餐建议<b data-ghost-v>≤700</b></div></div>
+      <div class="ticks"><span>7:00</span><span>12:00</span><span>17:00</span><span>23:00</span></div>
+    </div>
+    <div class="macros">
+      <div class="mr"><span>蛋白质</span><div class="bar"><i style="width:50%;background:#a855f7"></i></div><span class="v">74.5<em>/150</em></span></div>
+      <div class="mr"><span>碳水</span><div class="bar"><i style="width:72%;background:#3b82f6"></i></div><span class="v">144<em>/200</em></span></div>
+      <div class="mr"><span>脂肪</span><div class="bar"><i style="width:50%;background:#f97316"></i></div><span class="v">32.3<em>/65</em></span></div>
+    </div>
+    <div class="next"><div><div class="t">蛋白质还差 75g</div><div class="v">晚餐多吃点肉蛋奶</div></div><div class="go press" data-add-b>+ 记晚餐</div></div>
+    <nav class="tabbar">
+      <div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>今天</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg>趋势</div>
+      <div class="tab-add press"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v15H4zM4 10h16"/></svg>食物库</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg>我的</div>
+    </nav>
+  </div></div>
+</div>
+
+<!-- ================= C · 今日任务 ================= -->
+<div class="col">
+  <h2>C · 今日任务</h2>
+  <p class="why">像游戏的每日任务板：顶上是今天的能量条，下面是几条任务——蛋白达标、喝够水、三餐打卡、称体重。每条都能直接点 + 推进，完成了打勾变绿，再加连续天数。最有"玩"的感觉，也最能督促人。</p>
+  <div class="phone"><div class="screen C" id="C">
+    <div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="top"><b>今日任务</b><div class="streak"><i>12</i>连续 12 天</div></div>
+    <div class="energy press">
+      <div class="row1"><span class="t">能量 · 还能吃</span><span class="k num"><span data-left>825</span><small> kcal</small></span></div>
+      <div class="ebar"><i data-ebar style="width:58.75%"></i><span class="num" data-eaten>1175 / 2000</span></div>
+    </div>
+    <div class="quests">
+      <div class="q" data-q="protein">
+        <div class="ic" style="background:#f3e8ff;color:#7e22ce">蛋白</div>
+        <div><div class="n">蛋白质吃够 150g</div><div class="p num" data-p>74.5 / 150 g</div><div class="bar"><i data-b style="width:50%;background:#a855f7"></i></div></div>
+        <div class="btn press" data-add-c>+</div>
+      </div>
+      <div class="q" data-q="water">
+        <div class="ic" style="background:#e0efff;color:#1d4ed8">喝水</div>
+        <div><div class="n">喝够 8 杯水</div><div class="p num" data-p>5 / 8 杯</div><div class="bar"><i data-b style="width:62.5%;background:#3b82f6"></i></div></div>
+        <div class="btn press" data-water>+</div>
+      </div>
+      <div class="q">
+        <div class="ic" style="background:#fff1e3;color:#c2410c">三餐</div>
+        <div><div class="n">三餐都记上</div><div class="p">早 ✓ · 午 ✓ · 晚 待记</div><div class="bar"><i style="width:66.6%;background:#f97316"></i></div></div>
+        <div class="btn press">+</div>
+      </div>
+      <div class="q done">
+        <div class="ic" style="background:#c9f0dc;color:#047857">体重</div>
+        <div><div class="n">称一次体重</div><div class="p num">66.4 kg · 比昨天 −0.2</div></div>
+        <div class="btn">✓</div>
+      </div>
+    </div>
+    <nav class="tabbar">
+      <div class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9l2 2 4-4M9 15h6"/></svg>今天</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg>趋势</div>
+      <div class="tab-add press"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v15H4zM4 10h16"/></svg>食物库</div>
+      <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg>我的</div>
+    </nav>
+  </div></div>
+</div>
+
+</div>
+
+<script>
+// 演示用：每次「再吃一份」加 180 kcal / 蛋白 20g
+const GOAL = 2000;
+// 三台手机各算各的，互不影响
+const eatenBy = { A: 1175, B: 1175, C: 1175 };
+let dinner = 0, protein = 74.5, cups = 5;
+
+function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+function setLeft(root) {
+  const eaten = eatenBy[root.id];
+  root.querySelectorAll('[data-left]').forEach((el) => { el.textContent = Math.max(0, GOAL - eaten); el.style.color = eaten > GOAL ? '#c4242a' : ''; bump(el); });
+}
+
+// A：碗里加一层晚餐
+document.querySelector('[data-add-a]').addEventListener('click', () => {
+  eatenBy.A += 180; dinner += 180;
+  const A = document.getElementById('A');
+  const l4 = A.querySelector('.l4');
+  l4.style.height = (Math.min(dinner, GOAL) / GOAL * 100) + '%';
+  l4.textContent = '晚餐 ' + dinner;
+  setLeft(A);
+});
+
+// B：晚餐建议的虚线圈变小
+document.querySelector('[data-add-b]').addEventListener('click', () => {
+  eatenBy.B += 180;
+  const B = document.getElementById('B');
+  const rest = Math.max(0, 700 - (eatenBy.B - 1175));
+  const g = B.querySelector('[data-ghost]');
+  const size = 40 + rest / 700 * 68;
+  g.style.width = g.style.height = size + 'px';
+  g.style.transition = 'width 500ms var(--spring), height 500ms var(--spring)';
+  B.querySelector('[data-ghost-v]').textContent = '≤' + rest;
+  B.querySelector('[data-dinner]').textContent = rest;
+  setLeft(B); bump(g);
+});
+
+// C：蛋白任务推进，满了打勾
+document.querySelector('[data-add-c]').addEventListener('click', (e) => {
+  eatenBy.C += 180; protein = Math.min(150, protein + 20);
+  const C = document.getElementById('C');
+  const q = C.querySelector('[data-q="protein"]');
+  q.querySelector('[data-p]').textContent = protein + ' / 150 g';
+  q.querySelector('[data-b]').style.width = (protein / 150 * 100) + '%';
+  C.querySelector('[data-ebar]').style.width = Math.min(100, eatenBy.C / GOAL * 100) + '%';
+  C.querySelector('[data-eaten]').textContent = eatenBy.C + ' / 2000';
+  if (protein >= 150) { q.classList.add('done'); e.currentTarget.textContent = '✓'; }
+  setLeft(C); bump(q);
+});
+document.querySelector('[data-water]').addEventListener('click', (e) => {
+  cups = Math.min(8, cups + 1);
+  const q = document.querySelector('[data-q="water"]');
+  q.querySelector('[data-p]').textContent = cups + ' / 8 杯';
+  q.querySelector('[data-b]').style.width = (cups / 8 * 100) + '%';
+  if (cups >= 8) { q.classList.add('done'); e.currentTarget.textContent = '✓'; }
+  bump(q);
+});
+</script>
+</body>
+</html>

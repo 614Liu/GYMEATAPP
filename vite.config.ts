@@ -2,6 +2,9 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import {readFileSync} from 'fs';
+
+const APP_VERSION = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version as string;
 import {VitePWA} from 'vite-plugin-pwa';
 
 // 大的第三方库各自单独成块：改应用代码后，用户不用重新下载这些没变的库
@@ -23,6 +26,7 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig(() => {
   return {
+    define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     build: {
       rollupOptions: {
         output: { manualChunks: vendorChunk },

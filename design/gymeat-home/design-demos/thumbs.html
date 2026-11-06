@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>健食 · 六个候选缩略图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@500;600;700;800;900&family=Archivo:wght@800;900&family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+SC:wght@500;700;900&family=Noto+Serif+SC:wght@900&display=swap">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1d1f1e; color: #eee; font-family: "Noto Sans SC", sans-serif; padding: 28px; }
+h1 { font-size: 20px; margin-bottom: 4px; } p.l { color: #aaa; font-size: 13px; margin-bottom: 20px; }
+.grid { display: grid; grid-template-columns: repeat(3, 280px); gap: 28px 36px; }
+.cell .cap { font-size: 13px; font-weight: 700; margin-bottom: 8px; } .cell .cap span { color: #999; font-weight: 500; }
+.frame { width: 268px; height: 572px; padding: 6px; background: #111; border-radius: 30px; box-shadow: 0 0 0 1px #333; }
+.scr { width: 412px; height: 892px; transform: scale(.6214); transform-origin: 0 0; border-radius: 40px; overflow: hidden; position: relative; }
+.ph { width: 100%; height: 100%; object-fit: cover; display: block; }
+.status { position: absolute; top: 0; left: 0; right: 0; height: 32px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font: 500 14px Roboto, sans-serif; z-index: 5; }
+.hole { position: absolute; top: 10px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #000; z-index: 6; }
+
+/* 1 · Not Boring */
+.s1 { background: #ff8a1f; color: #1b1330; font-family: "Bricolage Grotesque", "Noto Sans SC"; }
+.s1 .top { padding: 48px 22px 0; }
+.s1 .lab { font: 900 18px "Noto Sans SC"; }
+.s1 .big { font-size: 150px; font-weight: 800; letter-spacing: -.05em; line-height: .85; }
+.s1 .big small { font-size: 28px; letter-spacing: 0; }
+.s1 .streak { position: absolute; right: 20px; top: 48px; background: #1b1330; color: #ffd66b; border-radius: 999px; padding: 8px 14px; font: 900 15px "Noto Sans SC"; }
+.s1 .stickers { display: flex; gap: 10px; padding: 18px 22px 0; }
+.s1 .stk { width: 86px; height: 86px; border-radius: 22px; overflow: hidden; border: 4px solid #fff; transform: rotate(-4deg); box-shadow: 0 6px 0 #c95e00; }
+.s1 .stk:nth-child(2) { transform: rotate(3deg); } .s1 .stk:nth-child(3) { transform: rotate(-2deg); }
+.s1 .sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 430px; background: #fff3e4; border-radius: 34px 34px 0 0; padding: 22px 18px; }
+.s1 .sheet h3 { font: 900 20px "Noto Sans SC"; margin-bottom: 12px; }
+.s1 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.s1 .tb { background: #fff; border-radius: 24px; padding: 14px; box-shadow: 0 6px 0 #e7cfb3; }
+.s1 .tb .n { font: 900 16px "Noto Sans SC"; } .s1 .tb .v { font-size: 34px; font-weight: 800; margin-top: 4px; } .s1 .tb .v small { font-size: 16px; opacity: .55; }
+.s1 .tb.done { background: #d4ff3f; box-shadow: 0 6px 0 #9fc21a; }
+.s1 .nav { position: absolute; left: 18px; right: 18px; bottom: 22px; height: 64px; background: #1b1330; border-radius: 999px; display: flex; justify-content: space-around; align-items: center; color: #fff; font: 700 13px "Noto Sans SC"; }
+.s1 .nav b { width: 54px; height: 54px; border-radius: 50%; background: #ff8a1f; color: #1b1330; display: grid; place-items: center; font-size: 30px; box-shadow: 0 4px 0 #c95e00; }
+
+/* 2 · Sato */
+.s2 { background: #fff; color: #111; font-family: Archivo, "Noto Sans SC"; }
+.s2 .blk { position: absolute; left: 0; right: 0; top: 0; height: 420px; background: #00a862; color: #fff; padding: 64px 26px 0; }
+.s2 .blk .lab { font: 900 22px "Noto Sans SC"; }
+.s2 .blk .big { font-size: 200px; font-weight: 900; letter-spacing: -.06em; line-height: .8; margin-top: 18px; }
+.s2 .blk .unit { font-size: 22px; font-weight: 800; margin-top: 8px; }
+.s2 .blk .streak { position: absolute; right: 26px; top: 64px; font: 900 16px "Noto Sans SC"; border: 3px solid #fff; padding: 4px 10px; }
+.s2 .row { position: absolute; top: 420px; left: 0; right: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+.s2 .row div { padding: 14px 16px; border-top: 6px solid #111; font: 700 14px "Noto Sans SC"; } .s2 .row div b { display: block; font: 900 26px Archivo; }
+.s2 .row div:nth-child(1) { border-color: #00a862; } .s2 .row div:nth-child(3) { border-color: #e60012; }
+.s2 .meals { position: absolute; top: 520px; left: 0; right: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; }
+.s2 .meals img { width: 100%; height: 130px; object-fit: cover; display: block; }
+.s2 .meals span { font: 700 13px "Noto Sans SC"; padding: 6px 10px; display: block; }
+.s2 .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 90px; border-top: 3px solid #111; display: flex; justify-content: space-around; align-items: center; font: 900 14px "Noto Sans SC"; }
+.s2 .nav b { width: 58px; height: 58px; background: #00a862; color: #fff; display: grid; place-items: center; font-size: 34px; }
+
+/* 3 · Monzo */
+.s3 { background: #ff5a3c; font-family: Figtree, "Noto Sans SC"; color: #14233c; }
+.s3 .top { padding: 52px 22px 0; color: #fff; }
+.s3 .top .lab { font: 700 16px "Noto Sans SC"; opacity: .9; }
+.s3 .top .big { font-size: 84px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+.s3 .top .big small { font-size: 24px; }
+.s3 .pills { display: flex; gap: 8px; margin-top: 14px; }
+.s3 .pills span { background: rgba(255,255,255,.22); color: #fff; border-radius: 999px; padding: 9px 14px; font: 700 14px "Noto Sans SC"; }
+.s3 .pills span:first-child { background: #fff; color: #ff5a3c; }
+.s3 .drawer { position: absolute; left: 0; right: 0; top: 270px; bottom: 0; background: #fff; border-radius: 34px 34px 0 0; padding: 20px 16px; }
+.s3 .quest { display: flex; gap: 8px; overflow: hidden; margin-bottom: 14px; }
+.s3 .q { flex: none; width: 150px; border-radius: 24px; padding: 12px 14px; font: 700 13px "Noto Sans SC"; }
+.s3 .q b { display: block; font: 900 24px Figtree; margin-top: 4px; }
+.s3 .pots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.s3 .pot { border-radius: 26px; overflow: hidden; background: #f4f4f6; }
+.s3 .pot img { width: 100%; height: 110px; object-fit: cover; display: block; }
+.s3 .pot div { padding: 8px 12px 12px; font: 700 14px "Noto Sans SC"; } .s3 .pot div b { font: 900 22px Figtree; display: block; }
+.s3 .pot.add { display: grid; place-items: center; border: 3px dashed #d8d8de; background: #fff; font: 900 15px "Noto Sans SC"; color: #ff5a3c; height: 170px; }
+.s3 .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 86px; background: #fff; box-shadow: 0 -1px 0 #eee; display: flex; justify-content: space-around; align-items: center; font: 700 12px "Noto Sans SC"; color: #8a90a0; }
+.s3 .nav b { width: 58px; height: 58px; border-radius: 50%; background: #14233c; color: #fff; display: grid; place-items: center; font-size: 30px; margin-top: -26px; }
+
+/* 4 · Liquid Glass */
+.s4 { font-family: Inter, "Noto Sans SC"; color: #fff; }
+.s4 .bg { position: absolute; inset: 0; } .s4 .bg img { filter: saturate(1.25) brightness(.78); transform: scale(1.1); }
+.s4 .glass { background: linear-gradient(135deg, rgba(255,255,255,.34), rgba(255,255,255,.12)); backdrop-filter: blur(22px) saturate(180%); border: 1px solid rgba(255,255,255,.45); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); border-radius: 30px; }
+.s4 .top { position: absolute; left: 16px; right: 16px; top: 46px; padding: 18px 20px; }
+.s4 .top .lab { font: 700 16px "Noto Sans SC"; } .s4 .top .big { font-size: 96px; font-weight: 700; letter-spacing: -.04em; line-height: 1; } .s4 .top .big small { font-size: 22px; }
+.s4 .top .streak { position: absolute; right: 18px; top: 18px; font: 700 14px "Noto Sans SC"; }
+.s4 .tasks { position: absolute; left: 16px; right: 16px; top: 268px; padding: 6px 16px; }
+.s4 .t { display: flex; justify-content: space-between; padding: 12px 0; font: 700 15px "Noto Sans SC"; border-bottom: 1px solid rgba(255,255,255,.25); } .s4 .t:last-child { border: 0; }
+.s4 .meals { position: absolute; left: 16px; right: 0; top: 520px; display: flex; gap: 10px; }
+.s4 .m { flex: none; width: 150px; padding: 8px; } .s4 .m img { width: 100%; height: 100px; object-fit: cover; border-radius: 22px; display: block; } .s4 .m div { padding: 8px 6px 2px; font: 700 14px "Noto Sans SC"; }
+.s4 .nav { position: absolute; left: 24px; right: 24px; bottom: 26px; height: 66px; border-radius: 999px; display: flex; justify-content: space-around; align-items: center; font: 700 12px "Noto Sans SC"; }
+
+/* 5 · Command palette */
+.s5 { background: #07080a; color: #e8e8e8; font-family: Inter, "Noto Sans SC"; }
+.s5 .top { padding: 52px 20px 0; } .s5 .top .lab { color: #8a8f98; font: 600 15px "Noto Sans SC"; } .s5 .top .big { font-size: 64px; font-weight: 700; letter-spacing: -.03em; }
+.s5 .input { margin: 16px 16px 0; height: 58px; background: #121315; border: 1px solid #242728; border-radius: 16px; display: flex; align-items: center; padding: 0 16px; font: 600 18px "Noto Sans SC"; color: #8a8f98; }
+.s5 .input i { width: 2px; height: 24px; background: #ff6363; margin-right: 10px; }
+.s5 .grp { color: #6b6f78; font: 600 13px "Noto Sans SC"; padding: 16px 20px 6px; }
+.s5 .it { display: flex; align-items: center; gap: 12px; padding: 9px 16px; margin: 0 8px; border-radius: 12px; font: 600 16px "Noto Sans SC"; }
+.s5 .it.sel { background: #202225; } .s5 .it img { width: 38px; height: 38px; border-radius: 10px; object-fit: cover; } .s5 .it span { color: #8a8f98; font-size: 13px; margin-left: auto; font-family: "JetBrains Mono"; }
+.s5 .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; border-top: 1px solid #1a1b1d; display: flex; justify-content: space-around; align-items: center; font: 600 12px "Noto Sans SC"; color: #6b6f78; }
+
+/* 6 · Tanaka */
+.s6 { background: #f2ede3; color: #111; font-family: "Noto Sans SC"; }
+.s6 .comp { position: absolute; left: 26px; top: 60px; width: 360px; height: 360px; display: grid; grid-template-columns: repeat(4, 90px); grid-template-rows: repeat(4, 90px); }
+.s6 .comp div { }
+.s6 .v { position: absolute; right: 26px; top: 450px; writing-mode: vertical-rl; font: 900 46px "Noto Serif SC"; }
+.s6 .big { position: absolute; left: 26px; top: 450px; font: 900 110px Archivo; letter-spacing: -.05em; line-height: .9; }
+.s6 .info { position: absolute; left: 26px; top: 570px; right: 100px; font: 700 15px "Noto Sans SC"; line-height: 2; }
+.s6 .info b { background: #d9381e; color: #fff; padding: 2px 8px; margin-right: 8px; }
+.s6 .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; border-top: 2px solid #111; display: flex; justify-content: space-around; align-items: center; font: 700 13px "Noto Sans SC"; }
+</style>
+</head>
+<body>
+<h1>六个候选（缩略图）</h1>
+<p class="l">真字体、真配色、真骨架、真照片；细节省略。挑最强、彼此最不一样的三张做完整版。</p>
+<div class="grid">
+
+<div class="cell"><div class="cap">1 · 最佳设计师 Andy Works <span>满版色 + 厚按钮</span></div><div class="frame"><div class="scr s1">
+  <div class="status"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="streak">连续 12 天</div>
+  <div class="top"><div class="lab">还能吃</div><div class="big">825<small>kcal</small></div></div>
+  <div class="stickers"><div class="stk"><img class="ph" src="../assets/img/oatmeal.jpg"></div><div class="stk"><img class="ph" src="../assets/img/eggs.jpg"></div><div class="stk"><img class="ph" src="../assets/img/chicken-rice.jpg"></div></div>
+  <div class="sheet"><h3>今日任务</h3><div class="btns">
+    <div class="tb"><div class="n">蛋白质</div><div class="v">74.5<small>/150</small></div></div>
+    <div class="tb"><div class="n">喝水</div><div class="v">5<small>/8 杯</small></div></div>
+    <div class="tb"><div class="n">三餐</div><div class="v">2<small>/3</small></div></div>
+    <div class="tb done"><div class="n">称体重 ✓</div><div class="v">66.4<small> kg</small></div></div>
+  </div></div>
+  <div class="nav"><span>今天</span><span>趋势</span><b>+</b><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+<div class="cell"><div class="cap">2 · 最佳设计师 佐藤可士和 <span>半屏纯色 + 一个数字</span></div><div class="frame"><div class="scr s2">
+  <div class="status" style="color:#fff"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="blk"><div class="lab">还能吃</div><div class="streak">连续 12 天</div><div class="big">825</div><div class="unit">KCAL / 2000</div></div>
+  <div class="row"><div>蛋白<b>74.5</b></div><div>碳水<b>144</b></div><div>脂肪<b>32.3</b></div></div>
+  <div class="meals"><div><img src="../assets/img/oatmeal.jpg"><span>早餐 460</span></div><div><img src="../assets/img/chicken-rice.jpg"><span>午餐 620</span></div><div><img src="../assets/img/apple.jpg"><span>加餐 95</span></div></div>
+  <div class="nav"><span>今天</span><span>趋势</span><b>+</b><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+<div class="cell"><div class="cap">3 · 现实参照 Monzo <span>彩色顶区 + 抽屉 + 罐子</span></div><div class="frame"><div class="scr s3">
+  <div class="status" style="color:#fff"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="top"><div class="lab">今天还能吃 · 连续 12 天</div><div class="big">825<small> kcal</small></div>
+    <div class="pills"><span>拍照记一笔</span><span>+ 一杯水</span><span>称体重</span></div></div>
+  <div class="drawer">
+    <div class="quest"><div class="q" style="background:#efe7ff">蛋白质<b>74.5/150</b></div><div class="q" style="background:#dff1ff">喝水<b>5/8 杯</b></div><div class="q" style="background:#fff1c9">三餐<b>2/3</b></div></div>
+    <div class="pots"><div class="pot"><img src="../assets/img/oatmeal.jpg"><div>早餐<b>460</b></div></div><div class="pot"><img src="../assets/img/chicken-rice.jpg"><div>午餐<b>620</b></div></div><div class="pot"><img src="../assets/img/apple.jpg"><div>加餐<b>95</b></div></div><div class="pot add">+ 记晚餐</div></div>
+  </div>
+  <div class="nav"><span>今天</span><span>趋势</span><b>+</b><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+<div class="cell"><div class="cap">4 · 现实参照 Apple Liquid Glass <span>背景是你吃的那顿饭</span></div><div class="frame"><div class="scr s4">
+  <div class="bg"><img class="ph" src="../assets/img/chicken-rice.jpg"></div>
+  <div class="status"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="top glass"><div class="lab">还能吃</div><div class="streak">连续 12 天</div><div class="big">825<small> kcal</small></div></div>
+  <div class="tasks glass"><div class="t"><span>蛋白质吃够</span><span>74.5/150</span></div><div class="t"><span>喝够 8 杯水</span><span>5/8</span></div><div class="t"><span>三餐都记上</span><span>2/3</span></div><div class="t"><span>称体重</span><span>✓</span></div></div>
+  <div class="meals"><div class="m glass"><img src="../assets/img/oatmeal.jpg"><div>早餐 460</div></div><div class="m glass"><img src="../assets/img/chicken-rice.jpg"><div>午餐 620</div></div><div class="m glass"><img src="../assets/img/apple.jpg"><div>加餐 95</div></div></div>
+  <div class="nav glass"><span>今天</span><span>趋势</span><span style="font-size:30px">+</span><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+<div class="cell"><div class="cap">5 · 轮盘 App 8 命令面板 <span>首页就是输入框</span></div><div class="frame"><div class="scr s5">
+  <div class="status"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="top"><div class="lab">还能吃 · 连续 12 天</div><div class="big">825 kcal</div></div>
+  <div class="input"><i></i>吃了什么？</div>
+  <div class="grp">常吃</div>
+  <div class="it sel"><img src="../assets/img/oatmeal.jpg">燕麦牛奶<span>320</span></div>
+  <div class="it"><img src="../assets/img/eggs.jpg">水煮蛋 ×2<span>140</span></div>
+  <div class="it"><img src="../assets/img/chicken-rice.jpg">鸡胸肉饭<span>620</span></div>
+  <div class="grp">今日任务</div>
+  <div class="it">蛋白质吃够<span>74.5/150</span></div><div class="it">喝够 8 杯水<span>5/8</span></div>
+  <div class="nav"><span>今天</span><span>趋势</span><span>+</span><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+<div class="cell"><div class="cap">6 · 轮盘 东亚 9 田中一光 <span>营养是几何</span></div><div class="frame"><div class="scr s6">
+  <div class="status"><span>9:41</span><span>100%</span></div><div class="hole"></div>
+  <div class="comp">
+    <div style="grid-column:1/3;grid-row:1/3;background:#d9381e;border-radius:180px 0 0 0"></div>
+    <div style="grid-column:3/5;grid-row:1/2;background:#111"></div>
+    <div style="grid-column:3/4;grid-row:2/4;background:#e3b23c;border-radius:0 0 90px 90px"></div>
+    <div style="grid-column:1/2;grid-row:3/5;background:#3b6e8f;border-radius:0 90px 0 0"></div>
+    <div style="grid-column:4/5;grid-row:3/5;background:#111;border-radius:90px"></div>
+  </div>
+  <div class="big">825</div><div class="v">还能吃</div>
+  <div class="info"><div><b>蛋白</b>74.5 / 150 g</div><div><b>碳水</b>144 / 200 g</div><div><b>脂肪</b>32.3 / 65 g</div><div><b>连续</b>12 天</div></div>
+  <div class="nav"><span>今天</span><span>趋势</span><span>+</span><span>食物库</span><span>我的</span></div>
+</div></div></div>
+
+</div>
+</body>
+</html>
